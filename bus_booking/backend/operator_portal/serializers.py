@@ -5,6 +5,35 @@ from common.models import Route
 from bookings.models import Schedule, BoardingPoint, DroppingPoint
 
 
+class OperatorProfileSerializer(serializers.ModelSerializer):
+    """Operator profile for onboarding: name, contact_info and bank_details as JSON (stored as text)."""
+
+    class Meta:
+        model = Operator
+        fields = ("id", "name", "contact_info", "bank_details", "kyc_status")
+        read_only_fields = ("id", "kyc_status")
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            data["contact_info"] = json.loads(instance.contact_info or "{}")
+        except Exception:
+            data["contact_info"] = {}
+        try:
+            data["bank_details"] = json.loads(instance.bank_details or "{}")
+        except Exception:
+            data["bank_details"] = {}
+        return data
+
+    def to_internal_value(self, data):
+        d = dict(data)
+        if "contact_info" in d and d["contact_info"] is not None:
+            d["contact_info"] = json.dumps(d["contact_info"]) if isinstance(d["contact_info"], dict) else str(d["contact_info"])
+        if "bank_details" in d and d["bank_details"] is not None:
+            d["bank_details"] = json.dumps(d["bank_details"]) if isinstance(d["bank_details"], dict) else str(d["bank_details"])
+        return super().to_internal_value(d)
+
+
 class SeatMapField(serializers.Field):
     """Exposes seat_map_json as seat_map (dict) in API."""
 

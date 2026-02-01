@@ -30,6 +30,16 @@ RAZORPAY_VERIFY_WEBHOOK = os.getenv('RAZORPAY_VERIFY_WEBHOOK', 'true').lower() =
 REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
 SEAT_HOLD_TTL_SECONDS = 10 * 60
 
+# OTP / SMS (optional). Set SMS_PROVIDER=twilio or msg91 and add keys to send real SMS.
+SMS_PROVIDER = os.getenv('SMS_PROVIDER', '')  # '', 'twilio', 'msg91'
+TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', '')
+TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', '')
+TWILIO_FROM_NUMBER = os.getenv('TWILIO_FROM_NUMBER', '')
+MSG91_AUTH_KEY = os.getenv('MSG91_AUTH_KEY', '')
+MSG91_SENDER_ID = os.getenv('MSG91_SENDER_ID', 'e-GO')
+OTP_TTL_SECONDS = 5 * 60  # 5 min
+OTP_LENGTH = 6
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
@@ -178,4 +188,18 @@ SPECTACULAR_SETTINGS = {
 }
 
 AUTH_USER_MODEL = 'users.User'
+
+# Case-insensitive username (and email) at login so "Surya" and "surya" both work
+AUTHENTICATION_BACKENDS = [
+    'users.backends.CaseInsensitiveBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Cache for OTP storage (use Redis in production for multi-worker)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'OPTIONS': {'MAX_ENTRIES': 10000},
+    }
+}
 

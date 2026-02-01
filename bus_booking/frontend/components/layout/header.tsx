@@ -25,6 +25,12 @@ export function Header() {
           >
             Search
           </Link>
+          <Link
+            href="/operator/login"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            For operators
+          </Link>
           {!isLoading && (
             <>
               {token ? (

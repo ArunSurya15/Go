@@ -1,12 +1,12 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 
-from buses.models import Bus
+from buses.models import Bus, Operator
 from bookings.models import Schedule
 from common.models import Route
 
 from .permissions import IsOperator
-from .serializers import OperatorBusSerializer, OperatorScheduleSerializer
+from .serializers import OperatorBusSerializer, OperatorScheduleSerializer, OperatorProfileSerializer
 
 
 def get_operator(request):
@@ -66,6 +66,19 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(status="PENDING")
+
+
+class OperatorProfileView(generics.RetrieveUpdateAPIView):
+    """GET or PATCH the logged-in operator's profile (for onboarding)."""
+    permission_classes = [IsAuthenticated, IsOperator]
+    serializer_class = OperatorProfileSerializer
+
+    def get_object(self):
+        op = get_operator(self.request)
+        if not op:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Operator access required.")
+        return op
 
 
 class ScheduleDetailView(generics.RetrieveUpdateAPIView):

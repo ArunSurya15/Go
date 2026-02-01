@@ -9,6 +9,7 @@ class User(AbstractUser):
         ('ADMIN', 'Admin'),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='PASSENGER')
+    phone = models.CharField(max_length=20, blank=True)  # for OTP / operator lookup
     # Link to Operator when role=OPERATOR (one operator can have multiple users if needed)
     operator = models.ForeignKey(
         'buses.Operator',
