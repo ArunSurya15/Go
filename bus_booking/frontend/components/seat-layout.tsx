@@ -214,7 +214,7 @@ function SteeringWheelIcon({ className }: { className?: string }) {
           <rect width="32" height="32" fill="white" />
 
           {/* Center hub hole */}
-          <circle cx="16" cy="16" r="2.7" fill="black" />
+          <circle cx="16" cy="18" r="2" fill="black" />
 
           {/* Top window (curved cap cut-out) */}
           <path
