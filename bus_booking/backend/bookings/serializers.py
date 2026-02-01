@@ -1,12 +1,14 @@
 from rest_framework import serializers
-from .models import Schedule, Reservation, Booking, Payment
+from .models import Schedule, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
 from common.serializers import RouteSerializer
 from buses.models import Bus
 
 class BusSlimSerializer(serializers.ModelSerializer):
+    operator_name = serializers.CharField(source='operator.name', read_only=True)
+
     class Meta:
         model = Bus
-        fields = ('id', 'registration_no', 'capacity')
+        fields = ('id', 'registration_no', 'capacity', 'operator_name')
 
 class ScheduleSerializer(serializers.ModelSerializer):
     route = RouteSerializer(read_only=True)
@@ -16,6 +18,22 @@ class ScheduleSerializer(serializers.ModelSerializer):
         model = Schedule
         fields = ('id', 'route', 'bus', 'departure_dt', 'arrival_dt', 'fare', 'status')
 
+
+class BoardingPointSerializer(serializers.ModelSerializer):
+    time = serializers.TimeField(format='%H:%M')
+
+    class Meta:
+        model = BoardingPoint
+        fields = ('id', 'schedule', 'time', 'location_name', 'landmark')
+
+
+class DroppingPointSerializer(serializers.ModelSerializer):
+    time = serializers.TimeField(format='%H:%M')
+
+    class Meta:
+        model = DroppingPoint
+        fields = ('id', 'schedule', 'time', 'location_name', 'description')
+
 class ReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
@@ -23,11 +41,12 @@ class ReservationSerializer(serializers.ModelSerializer):
         read_only_fields = ('reserved_by', 'expires_at', 'status')
 
 class BookingSerializer(serializers.ModelSerializer):
-    seats = serializers.ListField(child=serializers.CharField())
+    seats = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
         model = Booking
-        fields = ('id', 'user', 'schedule', 'seats', 'amount', 'status', 'payment_id')
+        fields = ('id', 'user', 'schedule', 'seats', 'amount', 'status', 'payment_id',
+                  'boarding_point', 'dropping_point', 'contact_phone', 'state_of_residence', 'whatsapp_opt_in')
         read_only_fields = ('user', 'status', 'payment_id')
 
     def to_representation(self, instance):

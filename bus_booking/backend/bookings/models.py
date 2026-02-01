@@ -26,6 +26,35 @@ class Schedule(models.Model):
     def __str__(self):
         return f"{self.route} @ {self.departure_dt:%Y-%m-%d %H:%M}"
 
+
+class BoardingPoint(models.Model):
+    """Boarding point for a schedule (time, location, landmark)."""
+    schedule = models.ForeignKey(Schedule, on_delete=models.CASCADE, related_name='boarding_points')
+    time = models.TimeField()
+    location_name = models.CharField(max_length=150)
+    landmark = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['time']
+
+    def __str__(self):
+        return f"{self.location_name} @ {self.time}"
+
+
+class DroppingPoint(models.Model):
+    """Dropping point for a schedule (time, location, description)."""
+    schedule = models.ForeignKey(Schedule, on_delete=models.CASCADE, related_name='dropping_points')
+    time = models.TimeField()
+    location_name = models.CharField(max_length=150)
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['time']
+
+    def __str__(self):
+        return f"{self.location_name} @ {self.time}"
+
+
 class Reservation(models.Model):
     STATUS_CHOICES = (
         ('PENDING', 'Pending'),
@@ -62,6 +91,11 @@ class Booking(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     payment_id = models.CharField(max_length=100, blank=True)
     ticket_file = models.CharField(max_length=255, blank=True)  # Path to generated ticket PDF
+    boarding_point = models.ForeignKey(BoardingPoint, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
+    dropping_point = models.ForeignKey(DroppingPoint, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
+    contact_phone = models.CharField(max_length=20, blank=True)
+    state_of_residence = models.CharField(max_length=100, blank=True)
+    whatsapp_opt_in = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

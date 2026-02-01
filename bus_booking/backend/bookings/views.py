@@ -3,8 +3,11 @@ from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .models import Schedule, Reservation, Booking, Payment
-from .serializers import ScheduleSerializer, ReservationSerializer, BookingSerializer, PaymentSerializer
+from .models import Schedule, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
+from .serializers import (
+    ScheduleSerializer, BoardingPointSerializer, DroppingPointSerializer,
+    ReservationSerializer, BookingSerializer, PaymentSerializer,
+)
 
 import razorpay
 from django.conf import settings
@@ -22,7 +25,7 @@ class ScheduleListView(generics.ListAPIView):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        qs = Schedule.objects.select_related('route', 'bus').all()
+        qs = Schedule.objects.select_related('route', 'bus', 'bus__operator').all()
         route_id = self.request.query_params.get('route_id')
         date = self.request.query_params.get('date')
         if route_id:
@@ -30,6 +33,69 @@ class ScheduleListView(generics.ListAPIView):
         if date:
             qs = qs.filter(departure_dt__date=date)
         return qs
+
+
+class BoardingPointListView(generics.ListAPIView):
+    serializer_class = BoardingPointSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        qs = BoardingPoint.objects.all()
+        schedule_id = self.request.query_params.get('schedule_id')
+        if schedule_id:
+            qs = qs.filter(schedule_id=schedule_id)
+        return qs.order_by('time')
+
+
+class DroppingPointListView(generics.ListAPIView):
+    serializer_class = DroppingPointSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        qs = DroppingPoint.objects.all()
+        schedule_id = self.request.query_params.get('schedule_id')
+        if schedule_id:
+            qs = qs.filter(schedule_id=schedule_id)
+        return qs.order_by('time')
+
+
+class ScheduleSeatMapView(generics.GenericAPIView):
+    """GET schedule seat layout and occupied seats for visual seat selection."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        import json
+        schedule = Schedule.objects.select_related('bus').filter(pk=pk).first()
+        if not schedule:
+            return Response({'detail': 'Schedule not found'}, status=404)
+        bus = schedule.bus
+        try:
+            layout = json.loads(bus.seat_map_json or '{}')
+        except Exception:
+            layout = {}
+        rows = layout.get('rows') or 10
+        cols = layout.get('cols') or 4
+        labels = layout.get('labels')
+        if not labels:
+            labels = []
+            for r in range(1, rows + 1):
+                for c in range(cols):
+                    labels.append(f"{r}{chr(65 + c)}")
+        occupied = set()
+        for r in Reservation.objects.filter(schedule=schedule, status='PENDING', expires_at__gt=timezone.now()).values_list('seat_no', flat=True):
+            occupied.add(r)
+        for b in Booking.objects.filter(schedule=schedule, status__in=['PENDING', 'CONFIRMED']).only('seats'):
+            try:
+                for s in json.loads(b.seats or '[]'):
+                    occupied.add(s)
+            except Exception:
+                pass
+        return Response({
+            'layout': {'rows': rows, 'cols': cols, 'labels': labels},
+            'occupied': list(occupied),
+            'fare': str(schedule.fare),
+        })
+
 
 class ReserveView(generics.CreateAPIView):
     serializer_class = ReservationSerializer
@@ -110,13 +176,27 @@ class CreatePaymentView(generics.GenericAPIView):
         if not amount:
             amount = str(Decimal(schedule.fare) * Decimal(len(seats)))
 
+        import json
+        booking_kw = {
+            'user': request.user,
+            'schedule_id': schedule_id,
+            'seats': json.dumps(seats),
+            'amount': amount,
+            'status': 'PENDING',
+            'contact_phone': request.data.get('contact_phone', ''),
+            'state_of_residence': request.data.get('state_of_residence', ''),
+            'whatsapp_opt_in': request.data.get('whatsapp_opt_in', False),
+        }
+        bp_id = request.data.get('boarding_point_id')
+        dp_id = request.data.get('dropping_point_id')
+        if bp_id:
+            booking_kw['boarding_point_id'] = bp_id
+        if dp_id:
+            booking_kw['dropping_point_id'] = dp_id
+
         use_demo = getattr(settings, 'DEMO_PAYMENTS', False) or not (settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
         if use_demo:
-            import json
-            booking = Booking.objects.create(
-                user=request.user, schedule_id=schedule_id, seats=json.dumps(seats),
-                amount=amount, status='PENDING'
-            )
+            booking = Booking.objects.create(**booking_kw)
             payment = Payment.objects.create(booking=booking, gateway_order_id=f"order_demo_{booking.id}", status='CREATED')
             return Response({
                 'booking_id': booking.id, 'order_id': payment.gateway_order_id,
@@ -124,14 +204,7 @@ class CreatePaymentView(generics.GenericAPIView):
             }, status=201)
 
         # Create booking (PENDING)
-        import json
-        booking = Booking.objects.create(
-            user=request.user,
-            schedule_id=schedule_id,
-            seats=json.dumps(seats),
-            amount=amount,
-            status='PENDING'
-        )
+        booking = Booking.objects.create(**booking_kw)
 
         # Create Razorpay order (amount in paise)
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))

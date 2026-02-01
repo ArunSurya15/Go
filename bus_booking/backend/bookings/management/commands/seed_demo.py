@@ -1,11 +1,11 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 
 from common.models import Route
 from buses.models import Operator, Bus
-from bookings.models import Schedule
+from bookings.models import Schedule, BoardingPoint, DroppingPoint
 
 class Command(BaseCommand):
     help = "Seed demo data: user, route, operator, bus, schedules"
@@ -70,6 +70,23 @@ class Command(BaseCommand):
                 )
                 if created:
                     created_count += 1
+
+        # Ensure all schedules for this route have boarding/dropping points
+        for s in Schedule.objects.filter(route=route, bus=bus).select_related('route', 'bus'):
+            if not s.boarding_points.exists():
+                for t, loc, land in [
+                    (time(21, 0), 'Yelahanka', 'Mahindra Show Room Opp'),
+                    (time(21, 10), 'Phoenix Mall of Asia', 'Opp. Shell Petrol Bunk Towards Hebbal'),
+                    (time(21, 20), 'Hebbal Esteem Mall', 'In Front Of Esteem Mall'),
+                ]:
+                    BoardingPoint.objects.get_or_create(schedule=s, time=t, defaults={'location_name': loc, 'landmark': land})
+            if not s.dropping_points.exists():
+                for t, loc, desc in [
+                    (time(4, 55), 'Morattandi Toll Plaza', 'Next to toll plaza'),
+                    (time(5, 0), 'Jipmer', 'Infront Of Jipmer Hospital Main Gate'),
+                    (time(5, 15), 'Pondicherry Bus Stand', 'Opp to Main bus stand exit gate'),
+                ]:
+                    DroppingPoint.objects.get_or_create(schedule=s, time=t, defaults={'location_name': loc, 'description': desc})
 
         self.stdout.write(self.style.SUCCESS(
             f"Seeded: Route {route}, Operator {op.name}, Bus {bus.registration_no}, Schedules created: {created_count}"
