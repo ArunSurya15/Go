@@ -43,7 +43,7 @@ export default function SelectSeatsPage() {
 
   const fare = seatMap?.fare ?? fareParam;
   const seats = selectedSeats;
-  const amount = (parseFloat(fare) * seats.length).toFixed(2);
+  const amount = Math.round(parseFloat(fare) * seats.length);
 
   const handleToggleSeat = (seat: string) => {
     setSelectedSeats((prev) =>
@@ -159,7 +159,7 @@ export default function SelectSeatsPage() {
                 <span className="font-medium">{seats.length} seat(s)</span>
                 {seats.length > 0 && (
                   <span className="text-muted-foreground ml-2">
-                    ₹{amount} (₹{fare} × {seats.length})
+                    ₹{amount} (₹{Math.round(Number(fare))} × {seats.length})
                   </span>
                 )}
               </div>
