@@ -53,15 +53,16 @@ function DeckGrid({
   // Column-major order: first row can be steering (last col) + empties; then seat cells
   const fareInt = Math.round(Number(fare)) || 0;
   const rowMinPx = 74;
+  const colWidthPx = 48; // fixed so lower and upper deck match
   const totalRows = steeringInTopRight ? numRows + 1 : numRows;
   const rowTemplate = steeringInTopRight
-    ? `52px repeat(${numRows}, minmax(${rowMinPx}px, auto))`
+    ? `68px repeat(${numRows}, minmax(${rowMinPx}px, auto))`
     : `repeat(${numRows}, minmax(${rowMinPx}px, auto))`;
   return (
     <div
       className="grid gap-1.5 w-fit"
       style={{
-        gridTemplateColumns: `repeat(${cols}, minmax(44px, 1fr))`,
+        gridTemplateColumns: `repeat(${cols}, ${colWidthPx}px)`,
         gridTemplateRows: rowTemplate,
         gridAutoFlow: "column",
       }}
@@ -70,15 +71,16 @@ function DeckGrid({
         const cells: React.ReactNode[] = [];
         if (steeringInTopRight) {
           if (c < cols - 1) {
-            cells.push(<div key={`empty-${c}`} className="min-w-[44px]" />);
+            cells.push(<div key={`empty-${c}`} style={{ minWidth: colWidthPx }} />);
           } else {
             cells.push(
               <div
                 key="steering"
-                className="flex min-w-[44px] items-center justify-center text-muted-foreground"
+                className="flex items-center justify-center pb-2 text-gray-400"
+                style={{ minWidth: colWidthPx }}
                 title="Bus direction (front)"
               >
-                <SteeringWheelIcon className="w-10 h-10" />
+                <SteeringWheelIcon className="h-[3.25rem] w-[3.25rem]" />
               </div>
             );
           }
@@ -97,7 +99,7 @@ function DeckGrid({
                 disabled={!canClick}
                 onClick={() => canClick && onSelect(label)}
                 className={`
-                  relative flex flex-col items-center justify-center rounded-lg border-2 min-h-[74px] min-w-[44px]
+                  relative flex flex-col items-center justify-center rounded-lg border-2 min-h-[74px] w-full min-w-0
                   transition-colors text-xs font-medium
                   ${isOccupied
                     ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -135,10 +137,13 @@ export function SeatLayout({ layout, occupied, fare, selected, onSelect }: SeatL
       {/* Know your seat types */}
       <SeatTypesLegend />
 
-      {/* Lower and Upper deck side by side — boxes fit seat grid width */}
-      <div className="flex flex-wrap justify-center gap-4 w-fit max-w-full">
-        <div className="border rounded-lg p-3 pt-2 pb-2 bg-muted/20 w-fit">
-          <p className="text-xs font-semibold text-muted-foreground mb-2">Lower deck</p>
+      {/* Lower and Upper deck side by side — same width and row alignment */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-fit max-w-full place-items-start">
+        <div className="border rounded-lg p-3 pt-2 pb-2 bg-muted/20 w-full min-w-0">
+          <div className="flex items-start justify-between gap-2 mb-2 min-h-[3.25rem]">
+            <p className="text-xs font-semibold text-muted-foreground">Lower deck</p>
+            <SteeringWheelIcon className="h-[3.25rem] w-[3.25rem] shrink-0 text-gray-400" title="Bus direction (front)" />
+          </div>
           <div className="mt-2 w-fit">
             <DeckGrid
               rows={lower}
@@ -146,13 +151,12 @@ export function SeatLayout({ layout, occupied, fare, selected, onSelect }: SeatL
               fare={fare}
               selectedSet={selectedSet}
               onSelect={handleSelect}
-              steeringInTopRight
             />
           </div>
         </div>
-        <div className="border rounded-lg p-3 pt-2 pb-2 bg-muted/20 w-fit">
-          <p className="text-xs font-semibold text-muted-foreground mb-2">Upper deck</p>
-          <div className="mt-2" style={{ paddingTop: "52px" }}>
+        <div className="border rounded-lg p-3 pt-2 pb-2 bg-muted/20 w-full min-w-0">
+          <p className="text-xs font-semibold text-muted-foreground mb-2 min-h-[3.25rem] flex items-start">Upper deck</p>
+          <div className="mt-2 w-fit">
             <DeckGrid
               rows={upper}
               occupiedSet={occupiedSet}
@@ -250,8 +254,8 @@ function SteeringWheelIcon({ className }: { className?: string }) {
         </mask>
       </defs>
 
-      {/* Solid disc; mask punches the 3 windows + hub */}
-      <circle cx="16" cy="16" r="14.5" fill="currentColor" mask="url(#steeringMask)" />
+      {/* Solid disc; mask punches the 3 windows + hub. Rim ~25% thinner than previous. */}
+      <circle cx="16" cy="16" r="11.7" fill="currentColor" mask="url(#steeringMask)" />
     </svg>
   );
 }
