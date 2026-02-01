@@ -38,6 +38,12 @@ class Command(BaseCommand):
             name='Demo Travels',
             defaults={'contact_info': '080-123456', 'kyc_status': 'APPROVED'}
         )
+        # Link demo_operator user to this operator (if not already)
+        User = get_user_model()
+        demo_op_user = User.objects.filter(username='demo_operator').first()
+        if demo_op_user and not demo_op_user.operator_id:
+            demo_op_user.operator = op
+            demo_op_user.save(update_fields=['operator'])
         seat_map = {
             "rows": 10,
             "cols": 4,
@@ -66,7 +72,7 @@ class Command(BaseCommand):
                     bus=bus,
                     route=route,
                     departure_dt=dep,
-                    defaults={'arrival_dt': arr, 'fare': fare, 'status': 'ACTIVE'}
+                    defaults={'arrival_dt': arr, 'fare': fare, 'status': 'ACTIVE'}  # ACTIVE so demo search shows them
                 )
                 if created:
                     created_count += 1

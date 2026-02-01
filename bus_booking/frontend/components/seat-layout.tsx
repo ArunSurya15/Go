@@ -221,8 +221,8 @@ function SteeringWheelIcon({ className }: { className?: string }) {
             fill="black"
             d="
               M 8.0 13.0
-              Q 16.0 6.2 24.0 13.0
-              Q 21.2 15.2 16.0 15.2
+              Q 16.0 3.5 24.0 13.0
+              Q 21.2 15.2 16.0 13
               Q 10.8 15.2 8.0 13.0
               Z
             "

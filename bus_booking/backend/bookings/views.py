@@ -25,7 +25,7 @@ class ScheduleListView(generics.ListAPIView):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        qs = Schedule.objects.select_related('route', 'bus', 'bus__operator').all()
+        qs = Schedule.objects.select_related('route', 'bus', 'bus__operator').filter(status='ACTIVE')
         route_id = self.request.query_params.get('route_id')
         date = self.request.query_params.get('date')
         if route_id:
@@ -68,6 +68,8 @@ class ScheduleSeatMapView(generics.GenericAPIView):
         schedule = Schedule.objects.select_related('bus').filter(pk=pk).first()
         if not schedule:
             return Response({'detail': 'Schedule not found'}, status=404)
+        if schedule.status != 'ACTIVE':
+            return Response({'detail': 'Schedule is not available'}, status=404)
         bus = schedule.bus
         try:
             layout = json.loads(bus.seat_map_json or '{}')
@@ -110,6 +112,8 @@ class ReserveView(generics.CreateAPIView):
         schedule = Schedule.objects.filter(id=schedule_id).first()
         if not schedule:
             return Response({'detail': 'Invalid schedule_id'}, status=404)
+        if schedule.status != 'ACTIVE':
+            return Response({'detail': 'Schedule is not available for booking'}, status=400)
 
         ttl_minutes = 10
         expires_at = timezone.now() + timedelta(minutes=ttl_minutes)
@@ -173,6 +177,8 @@ class CreatePaymentView(generics.GenericAPIView):
         schedule = Schedule.objects.filter(id=schedule_id).first()
         if not schedule:
             return Response({'detail': 'Invalid schedule_id'}, status=404)
+        if schedule.status != 'ACTIVE':
+            return Response({'detail': 'Schedule is not available for booking'}, status=400)
         if not amount:
             amount = str(Decimal(schedule.fare) * Decimal(len(seats)))
 

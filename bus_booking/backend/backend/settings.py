@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'buses',
     'bookings',
     'common',
+    'operator_portal',
 ]
 
 MIDDLEWARE = [

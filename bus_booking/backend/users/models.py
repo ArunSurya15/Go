@@ -9,6 +9,14 @@ class User(AbstractUser):
         ('ADMIN', 'Admin'),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='PASSENGER')
+    # Link to Operator when role=OPERATOR (one operator can have multiple users if needed)
+    operator = models.ForeignKey(
+        'buses.Operator',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users'
+    )
 
     def __str__(self):
         return f"{self.username} ({self.role})"
