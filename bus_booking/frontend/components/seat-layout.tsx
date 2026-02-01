@@ -195,55 +195,64 @@ function SeatTypesLegend() {
   );
 }
 
-/** Steering wheel icon: solid rim, thick spokes (one top, two angled bottom), small white central hub. */
+/** Steering wheel icon: solid disc with 3 curved cut-outs + center hub hole */
 function SteeringWheelIcon({ className }: { className?: string }) {
-  const cx = 16;
-  const cy = 16;
-  const rimOuter = 13;
-  const rimInner = 8;
-  const hubRadius = 3; // small hub so spokes are visible
-  const spokeWidth = 4;
-  const spokeLength = rimOuter - hubRadius; // spoke from rim to just outside hub
   return (
     <svg
       className={className}
       viewBox="0 0 32 32"
-      fill="currentColor"
-      fillRule="evenodd"
       aria-hidden
+      xmlns="http://www.w3.org/2000/svg"
     >
-      {/* Thick solid rim (ring): outer circle then inner circle for evenodd hole */}
-      <path
-        d={`M ${cx + rimOuter} ${cy} A ${rimOuter} ${rimOuter} 0 1 1 ${cx - rimOuter} ${cy} A ${rimOuter} ${rimOuter} 0 1 1 ${cx + rimOuter} ${cy} Z M ${cx + rimInner} ${cy} A ${rimInner} ${rimInner} 0 1 1 ${cx - rimInner} ${cy} A ${rimInner} ${rimInner} 0 1 1 ${cx + rimInner} ${cy} Z`}
-      />
-      {/* Top spoke (thick, from rim down to hub) */}
-      <rect
-        x={cx - spokeWidth / 2}
-        y={cy - rimOuter}
-        width={spokeWidth}
-        height={spokeLength}
-        rx={spokeWidth / 2}
-      />
-      {/* Bottom-left spoke (~8 o'clock) */}
-      <rect
-        x={cx - spokeWidth / 2}
-        y={cy}
-        width={spokeWidth}
-        height={spokeLength}
-        rx={spokeWidth / 2}
-        transform={`rotate(120 ${cx} ${cy})`}
-      />
-      {/* Bottom-right spoke (~4 o'clock) */}
-      <rect
-        x={cx - spokeWidth / 2}
-        y={cy}
-        width={spokeWidth}
-        height={spokeLength}
-        rx={spokeWidth / 2}
-        transform={`rotate(240 ${cx} ${cy})`}
-      />
-      {/* Small white central hub (on top so spokes sit behind it) */}
-      <circle cx={cx} cy={cy} r={hubRadius} fill="white" fillRule="nonzero" />
+      <defs>
+        {/* White = visible, Black = punched out */}
+        <mask id="steeringMask">
+          <rect width="32" height="32" fill="white" />
+
+          {/* Center hub hole */}
+          <circle cx="16" cy="16" r="2.7" fill="black" />
+
+          {/* Top window (curved cap cut-out) */}
+          <path
+            fill="black"
+            d="
+              M 8.0 13.0
+              Q 16.0 6.2 24.0 13.0
+              Q 21.2 15.2 16.0 15.2
+              Q 10.8 15.2 8.0 13.0
+              Z
+            "
+          />
+
+          {/* Bottom-left window */}
+          <path
+            fill="black"
+            d="
+              M 7.8 18.2
+              Q 8.6 24.8 14.2 24.6
+              Q 13.2 20.4 10.8 18.0
+              Q 9.2 16.4 7.8 18.2
+              Z
+            "
+          />
+
+          {/* Bottom-right window (mirror of bottom-left) */}
+          <path
+            fill="black"
+            d="
+              M 24.2 18.2
+              Q 23.4 24.8 17.8 24.6
+              Q 18.8 20.4 21.2 18.0
+              Q 22.8 16.4 24.2 18.2
+              Z
+            "
+          />
+        </mask>
+      </defs>
+
+      {/* Solid disc; mask punches the 3 windows + hub */}
+      <circle cx="16" cy="16" r="14.5" fill="currentColor" mask="url(#steeringMask)" />
     </svg>
   );
 }
+
