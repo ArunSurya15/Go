@@ -9,10 +9,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+const BUSINESS_BACKGROUND_OPTIONS = [
+  { value: "", label: "Select" },
+  { value: "traditionally_bo", label: "Traditionally BO" },
+  { value: "travel_agent", label: "Travel Agent" },
+  { value: "logistics", label: "Logistics" },
+  { value: "aggregator", label: "Aggregator" },
+  { value: "distributor", label: "Distributor" },
+  { value: "others", label: "Others" },
+];
+
+const MSME_OPTIONS = [
+  { value: "", label: "Select" },
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+];
+
 const STEPS = [
-  { id: 1, title: "Company & contact", key: "company" },
-  { id: 2, title: "Bank details", key: "bank" },
-  { id: 3, title: "Done", key: "done" },
+  { id: 1, title: "Personal details", key: "company" },
+  { id: 2, title: "Business & tax", key: "tax" },
+  { id: 3, title: "Bank details", key: "bank" },
+  { id: 4, title: "Done", key: "done" },
 ];
 
 export default function OperatorOnboardingPage() {
@@ -26,13 +43,23 @@ export default function OperatorOnboardingPage() {
   const [form, setForm] = useState({
     name: "",
     owner_name: "",
+    business_background: "",
+    business_background_other: "",
     phone: "",
+    alternate_phone: "",
     email: "",
+    alternate_email: "",
     address: "",
     city: "",
     state: "",
+    district: "",
     pincode: "",
     country: "India",
+    pan: "",
+    msme: "",
+    msme_number: "",
+    cin: "",
+    gst_number: "",
     bank_name: "",
     account_name: "",
     account_number: "",
@@ -67,6 +94,31 @@ export default function OperatorOnboardingPage() {
     return () => { cancelled = true; };
   }, [getValidToken, router]);
 
+  const contactInfoStep1 = () => ({
+    owner_name: form.owner_name,
+    phone: form.phone,
+    alternate_phone: form.alternate_phone,
+    email: form.email,
+    alternate_email: form.alternate_email,
+    address: form.address,
+    city: form.city,
+    state: form.state,
+    district: form.district,
+    pincode: form.pincode,
+    country: form.country,
+    business_background: form.business_background,
+    business_background_other: form.business_background_other,
+  });
+
+  const contactInfoFull = () => ({
+    ...contactInfoStep1(),
+    pan: form.pan,
+    msme: form.msme,
+    msme_number: form.msme_number,
+    cin: form.cin,
+    gst_number: form.gst_number,
+  });
+
   const saveStep1 = async () => {
     setError("");
     setSaving(true);
@@ -75,16 +127,7 @@ export default function OperatorOnboardingPage() {
     try {
       const p = await operatorApi.updateProfile(token, {
         name: form.name,
-        contact_info: {
-          owner_name: form.owner_name,
-          phone: form.phone,
-          email: form.email,
-          address: form.address,
-          city: form.city,
-          state: form.state,
-          pincode: form.pincode,
-          country: form.country,
-        },
+        contact_info: contactInfoStep1(),
       });
       setProfile(p);
       setStep(2);
@@ -96,6 +139,27 @@ export default function OperatorOnboardingPage() {
   };
 
   const saveStep2 = async () => {
+    setError("");
+    if (!form.pan.trim()) {
+      setError("PAN is required.");
+      return;
+    }
+    setSaving(true);
+    const token = await getValidToken();
+    if (!token) return;
+    try {
+      await operatorApi.updateProfile(token, {
+        contact_info: contactInfoFull(),
+      });
+      setStep(3);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveStep3 = async () => {
     setError("");
     setSaving(true);
     const token = await getValidToken();
@@ -109,7 +173,7 @@ export default function OperatorOnboardingPage() {
           ifsc: form.ifsc,
         },
       });
-      setStep(3);
+      setStep(4);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed.");
     } finally {
@@ -129,19 +193,20 @@ export default function OperatorOnboardingPage() {
     <div className="mx-auto max-w-2xl">
       <div className="mb-8 flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Complete your profile</h1>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {STEPS.map((s) => (
             <button
               key={s.id}
               type="button"
               onClick={() => step > s.id && setStep(s.id)}
-              className={`h-8 w-8 rounded-full text-sm font-medium ${
+              className={`flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-medium ${
                 step === s.id
                   ? "bg-indigo-600 text-white"
                   : step > s.id
                     ? "bg-indigo-100 text-indigo-700"
                     : "bg-slate-200 text-slate-500"
               }`}
+              title={s.title}
             >
               {s.id}
             </button>
@@ -152,8 +217,8 @@ export default function OperatorOnboardingPage() {
       {step === 1 && (
         <Card className="border-slate-200 shadow-md">
           <CardHeader>
-            <CardTitle>Company & contact details</CardTitle>
-            <CardDescription>We use this to display your business to passengers and for payouts.</CardDescription>
+            <CardTitle>Personal details</CardTitle>
+            <CardDescription>Company, owner and address. We use this to display your business and for payouts.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -167,6 +232,33 @@ export default function OperatorOnboardingPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="business_background">Business background *</Label>
+                <select
+                  id="business_background"
+                  value={form.business_background}
+                  onChange={(e) => setForm((f) => ({ ...f, business_background: e.target.value }))}
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {BUSINESS_BACKGROUND_OPTIONS.map((o) => (
+                    <option key={o.value || "empty"} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {form.business_background === "others" && (
+              <div className="space-y-2">
+                <Label htmlFor="business_background_other">Business background (other)</Label>
+                <Input
+                  id="business_background_other"
+                  value={form.business_background_other}
+                  onChange={(e) => setForm((f) => ({ ...f, business_background_other: e.target.value }))}
+                  placeholder="Describe your business"
+                />
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
                 <Label htmlFor="owner_name">Owner name *</Label>
                 <Input
                   id="owner_name"
@@ -174,24 +266,53 @@ export default function OperatorOnboardingPage() {
                   onChange={(e) => setForm((f) => ({ ...f, owner_name: e.target.value }))}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country *</Label>
+                <Input
+                  id="country"
+                  value={form.country}
+                  onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">Mobile *</Label>
                 <Input
                   id="phone"
                   type="tel"
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="e.g. 9943373588"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="alternate_phone">Phone (landline)</Label>
+                <Input
+                  id="alternate_phone"
+                  type="tel"
+                  value={form.alternate_phone}
+                  onChange={(e) => setForm((f) => ({ ...f, alternate_phone: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
                 <Input
                   id="email"
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="alternate_email">Alternate email</Label>
+                <Input
+                  id="alternate_email"
+                  type="email"
+                  value={form.alternate_email}
+                  onChange={(e) => setForm((f) => ({ ...f, alternate_email: e.target.value }))}
                 />
               </div>
             </div>
@@ -205,11 +326,11 @@ export default function OperatorOnboardingPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="city">City *</Label>
+                <Label htmlFor="pincode">Pincode *</Label>
                 <Input
-                  id="city"
-                  value={form.city}
-                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                  id="pincode"
+                  value={form.pincode}
+                  onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value }))}
                 />
               </div>
               <div className="space-y-2">
@@ -223,31 +344,104 @@ export default function OperatorOnboardingPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="pincode">Pincode *</Label>
+                <Label htmlFor="city">City *</Label>
                 <Input
-                  id="pincode"
-                  value={form.pincode}
-                  onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value }))}
+                  id="city"
+                  value={form.city}
+                  onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="country">Country *</Label>
+                <Label htmlFor="district">District *</Label>
                 <Input
-                  id="country"
-                  value={form.country}
-                  onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
+                  id="district"
+                  value={form.district}
+                  onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
                 />
               </div>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button onClick={saveStep1} disabled={saving || !form.name} className="bg-indigo-600 hover:bg-indigo-700">
-              {saving ? "Saving…" : "Next: Bank details"}
+            <Button onClick={saveStep1} disabled={saving || !form.name || !form.business_background} className="bg-indigo-600 hover:bg-indigo-700">
+              {saving ? "Saving…" : "Next: Business & tax"}
             </Button>
           </CardContent>
         </Card>
       )}
 
       {step === 2 && (
+        <Card className="border-slate-200 shadow-md">
+          <CardHeader>
+            <CardTitle>Business & tax</CardTitle>
+            <CardDescription>Identification details for payouts and compliance.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="pan">PAN *</Label>
+              <Input
+                id="pan"
+                value={form.pan}
+                onChange={(e) => setForm((f) => ({ ...f, pan: e.target.value.toUpperCase() }))}
+                placeholder="e.g. AAAAA9999A"
+                maxLength={10}
+                className="uppercase"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="msme">MSME? *</Label>
+                <select
+                  id="msme"
+                  value={form.msme}
+                  onChange={(e) => setForm((f) => ({ ...f, msme: e.target.value }))}
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {MSME_OPTIONS.map((o) => (
+                    <option key={o.value || "empty"} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              {form.msme === "yes" && (
+                <div className="space-y-2">
+                  <Label htmlFor="msme_number">MSME number</Label>
+                  <Input
+                    id="msme_number"
+                    value={form.msme_number}
+                    onChange={(e) => setForm((f) => ({ ...f, msme_number: e.target.value }))}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cin">CIN (Corporate Identity Number)</Label>
+              <Input
+                id="cin"
+                value={form.cin}
+                onChange={(e) => setForm((f) => ({ ...f, cin: e.target.value }))}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gst_number">GST number</Label>
+              <Input
+                id="gst_number"
+                value={form.gst_number}
+                onChange={(e) => setForm((f) => ({ ...f, gst_number: e.target.value }))}
+                placeholder="Optional"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
+              <Button onClick={saveStep2} disabled={saving || !form.pan.trim()} className="bg-indigo-600 hover:bg-indigo-700">
+                {saving ? "Saving…" : "Next: Bank details"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === 3 && (
         <Card className="border-slate-200 shadow-md">
           <CardHeader>
             <CardTitle>Bank details</CardTitle>
@@ -289,8 +483,8 @@ export default function OperatorOnboardingPage() {
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-              <Button onClick={saveStep2} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
+              <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
+              <Button onClick={saveStep3} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
                 {saving ? "Saving…" : "Finish"}
               </Button>
             </div>
@@ -298,7 +492,7 @@ export default function OperatorOnboardingPage() {
         </Card>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <Card className="border-slate-200 shadow-md">
           <CardContent className="py-12 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600">

@@ -202,4 +202,3 @@ CACHES = {
         'OPTIONS': {'MAX_ENTRIES': 10000},
     }
 }
-

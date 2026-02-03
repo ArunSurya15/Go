@@ -40,6 +40,10 @@ class OperatorRegisterSerializer(serializers.Serializer):
     def validate(self, attrs):
         email = (attrs.get("email") or "").strip()
         phone = (attrs.get("phone") or "").strip()
+        if not email and not phone:
+            raise serializers.ValidationError(
+                "Provide at least one of email or mobile number."
+            )
         if email and User.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError({"email": "This email is already registered."})
         if phone and User.objects.filter(phone=phone).exists():

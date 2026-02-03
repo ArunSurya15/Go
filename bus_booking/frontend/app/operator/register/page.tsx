@@ -73,13 +73,17 @@ export default function OperatorRegisterPage() {
     e.preventDefault();
     setError("");
     setSuccess("");
+    if (!form.email?.trim() && !form.phone?.trim()) {
+      setError("Provide at least one of email or mobile number.");
+      return;
+    }
     setLoading(true);
     try {
       await authApi.registerOperator({
         username: form.username,
-        email: form.email || undefined,
+        email: form.email?.trim() || undefined,
         password: form.password,
-        phone: form.phone || undefined,
+        phone: form.phone?.trim() || undefined,
         company_name: form.company_name,
         owner_name: form.owner_name || undefined,
       });
@@ -136,6 +140,7 @@ export default function OperatorRegisterPage() {
                 required
               />
             </div>
+            <p className="text-sm text-slate-500">Provide at least one of email or mobile. Each must be unique.</p>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -145,6 +150,7 @@ export default function OperatorRegisterPage() {
                   autoComplete="email"
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="your@email.com"
                 />
               </div>
               <div className="space-y-2">

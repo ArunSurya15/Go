@@ -72,7 +72,7 @@ export default function OperatorDashboardPage() {
           </CardHeader>
           <CardContent>
             {buses.length === 0 ? (
-              <p className="text-sm text-slate-500">No buses yet. Add buses via the API or ask admin to create one.</p>
+              <p className="text-sm text-slate-500">No buses yet. Add your first bus to start creating schedules.</p>
             ) : (
               <ul className="space-y-2">
                 {buses.slice(0, 5).map((bus) => (
@@ -86,9 +86,11 @@ export default function OperatorDashboardPage() {
                 )}
               </ul>
             )}
-            <p className="mt-4 text-xs text-slate-500">
-              Use <strong>POST /api/operator/buses/</strong> to add a bus (registration_no, capacity, seat_map).
-            </p>
+            <div className="mt-4">
+              <Link href="/operator/buses/new">
+                <Button size="sm">Add bus</Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
 
@@ -102,13 +104,15 @@ export default function OperatorDashboardPage() {
           </CardHeader>
           <CardContent>
             {schedules.length === 0 ? (
-              <p className="text-sm text-slate-500">No schedules yet. Create schedules via the API.</p>
+              <p className="text-sm text-slate-500">No schedules yet. Add a bus first, then create a schedule.</p>
             ) : (
-              <p className="text-sm text-slate-600">View and manage schedules via API or admin.</p>
+              <p className="text-sm text-slate-600">New schedules are PENDING until approved by admin.</p>
             )}
-            <p className="mt-4 text-xs text-slate-500">
-              Use <strong>POST /api/operator/schedules/</strong> to add a schedule (bus, route, times, fare, boarding/dropping points).
-            </p>
+            <div className="mt-4">
+              <Link href="/operator/schedules/new">
+                <Button size="sm" disabled={buses.length === 0}>Add schedule</Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -117,6 +121,12 @@ export default function OperatorDashboardPage() {
         <CardContent className="py-6">
           <h3 className="font-semibold text-slate-800">Quick links</h3>
           <ul className="mt-2 space-y-1 text-sm">
+            <li>
+              <Link href="/operator/buses/new" className="text-indigo-600 hover:underline">Add bus</Link>
+            </li>
+            <li>
+              <Link href="/operator/schedules/new" className="text-indigo-600 hover:underline">Add schedule</Link>
+            </li>
             <li>
               <Link href="/operator/onboarding" className="text-indigo-600 hover:underline">Complete or edit profile</Link>
             </li>
