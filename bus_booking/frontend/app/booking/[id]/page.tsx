@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { booking, ticketDownloadUrl } from "@/lib/api";
+import { booking, ticketDownloadUrl, type Booking } from "@/lib/api";
 
 export default function BookingSuccessPage() {
   const params = useParams();
@@ -21,6 +21,7 @@ export default function BookingSuccessPage() {
   const { token } = useAuth();
   const id = Number(params.id);
   const [ticketUrl, setTicketUrl] = useState<string | null>(null);
+  const [bookingData, setBookingData] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -29,9 +30,13 @@ export default function BookingSuccessPage() {
       setLoading(false);
       return;
     }
-    booking.ticket(token, id)
-      .then((res) => setTicketUrl(res.ticket_url))
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to get ticket."))
+    Promise.all([
+      booking.ticket(token, id).then((res) => setTicketUrl(res.ticket_url)),
+      booking.list(token).then((list) => {
+        const b = list.find((x) => x.id === id);
+        if (b) setBookingData(b);
+      }),
+    ]).catch((err) => setError(err instanceof Error ? err.message : "Failed to load booking."))
       .finally(() => setLoading(false));
   }, [token, id]);
 
@@ -85,9 +90,21 @@ export default function BookingSuccessPage() {
                 Download ticket (PDF)
               </Button>
             )}
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/">Search again</Link>
-            </Button>
+            {bookingData && bookingData.status === "CONFIRMED" && (
+              <Button variant="outline" className="w-full" asChild>
+                <Link href={`/track?schedule_id=${bookingData.schedule.id}`}>
+                  Track bus
+                </Link>
+              </Button>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" asChild>
+                <Link href="/bookings">My Bookings</Link>
+              </Button>
+              <Button variant="outline" className="flex-1" asChild>
+                <Link href="/">Search again</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </motion.div>

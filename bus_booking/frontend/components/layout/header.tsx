@@ -25,6 +25,14 @@ export function Header() {
           >
             Search
           </Link>
+          {token && (
+            <Link
+              href="/bookings"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              My Bookings
+            </Link>
+          )}
           <Link
             href="/operator/login"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"

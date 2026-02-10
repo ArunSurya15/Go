@@ -193,9 +193,7 @@ AUTH_USER_MODEL = 'users.User'
 AUTHENTICATION_BACKENDS = [
     'users.backends.CaseInsensitiveBackend',
     'django.contrib.auth.backends.ModelBackend',
-]
-
-# Cache for OTP storage (use Redis in production for multi-worker)
+]# Cache for OTP storage (use Redis in production for multi-worker)
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',

@@ -1,8 +1,10 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from buses.models import Bus, Operator
-from bookings.models import Schedule
+from bookings.models import Schedule, ScheduleLocation
 from common.models import Route
 
 from .permissions import IsOperator
@@ -100,3 +102,29 @@ class ScheduleDetailView(generics.RetrieveUpdateAPIView):
         ctx = super().get_serializer_context()
         ctx["operator"] = get_operator(self.request)
         return ctx
+
+
+class ScheduleLocationView(APIView):
+    """POST: operator/driver sends current GPS (lat, lng) for a schedule. Schedule must belong to operator."""
+    permission_classes = [IsAuthenticated, IsOperator]
+
+    def post(self, request, pk):
+        op = get_operator(request)
+        if not op:
+            return Response({"detail": "Operator access required."}, status=403)
+        schedule = Schedule.objects.filter(pk=pk, bus__operator=op).first()
+        if not schedule:
+            return Response({"detail": "Schedule not found."}, status=404)
+        lat = request.data.get("lat")
+        lng = request.data.get("lng")
+        if lat is None or lng is None:
+            return Response({"detail": "lat and lng are required."}, status=400)
+        try:
+            ScheduleLocation.objects.create(
+                schedule=schedule,
+                lat=float(lat),
+                lng=float(lng),
+            )
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid lat/lng."}, status=400)
+        return Response({"detail": "Location recorded."}, status=201)

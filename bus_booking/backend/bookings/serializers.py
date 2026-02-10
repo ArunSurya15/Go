@@ -42,12 +42,13 @@ class ReservationSerializer(serializers.ModelSerializer):
 
 class BookingSerializer(serializers.ModelSerializer):
     seats = serializers.ListField(child=serializers.CharField(), required=False)
+    schedule = ScheduleSerializer(read_only=True)
 
     class Meta:
         model = Booking
         fields = ('id', 'user', 'schedule', 'seats', 'amount', 'status', 'payment_id',
-                  'boarding_point', 'dropping_point', 'contact_phone', 'state_of_residence', 'whatsapp_opt_in')
-        read_only_fields = ('user', 'status', 'payment_id')
+                  'boarding_point', 'dropping_point', 'contact_phone', 'state_of_residence', 'whatsapp_opt_in', 'created_at')
+        read_only_fields = ('user', 'status', 'payment_id', 'created_at')
 
     def to_representation(self, instance):
         import json

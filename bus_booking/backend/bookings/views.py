@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .models import Schedule, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
+from .models import Schedule, ScheduleLocation, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
 from .serializers import (
     ScheduleSerializer, BoardingPointSerializer, DroppingPointSerializer,
     ReservationSerializer, BookingSerializer, PaymentSerializer,
@@ -78,11 +78,14 @@ class ScheduleSeatMapView(generics.GenericAPIView):
         rows = layout.get('rows') or 10
         cols = layout.get('cols') or 4
         labels = layout.get('labels')
+        types = layout.get('types')
         if not labels:
             labels = []
             for r in range(1, rows + 1):
                 for c in range(cols):
                     labels.append(f"{r}{chr(65 + c)}")
+        if not types or len(types) != rows * cols:
+            types = ['seater'] * (rows * cols)
         occupied = set()
         for r in Reservation.objects.filter(schedule=schedule, status='PENDING', expires_at__gt=timezone.now()).values_list('seat_no', flat=True):
             occupied.add(r)
@@ -93,9 +96,59 @@ class ScheduleSeatMapView(generics.GenericAPIView):
             except Exception:
                 pass
         return Response({
-            'layout': {'rows': rows, 'cols': cols, 'labels': labels},
+            'layout': {'rows': rows, 'cols': cols, 'labels': labels, 'types': types},
             'occupied': list(occupied),
             'fare': str(schedule.fare),
+        })
+
+
+class ScheduleTrackView(generics.GenericAPIView):
+    """GET live tracking for a schedule. Active from 1 hour before departure until arrival."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        schedule = Schedule.objects.select_related('route').filter(pk=pk, status='ACTIVE').first()
+        if not schedule:
+            return Response({'detail': 'Schedule not found'}, status=404)
+        tracking_start = schedule.departure_dt - timedelta(hours=1)
+        tracking_end = schedule.arrival_dt
+        now = timezone.now()
+        if now < tracking_start:
+            return Response({
+                'active': False,
+                'message': 'Tracking starts 1 hour before departure.',
+                'tracking_starts_at': tracking_start.isoformat(),
+                'tracking_ends_at': tracking_end.isoformat(),
+                'schedule_id': schedule.id,
+                'route': f'{schedule.route.origin} → {schedule.route.destination}',
+                'locations': [],
+            })
+        if now > tracking_end:
+            return Response({
+                'active': False,
+                'message': 'Trip has ended.',
+                'tracking_starts_at': tracking_start.isoformat(),
+                'tracking_ends_at': tracking_end.isoformat(),
+                'schedule_id': schedule.id,
+                'route': f'{schedule.route.origin} → {schedule.route.destination}',
+                'locations': [],
+            })
+        locations = list(
+            ScheduleLocation.objects.filter(schedule=schedule)
+            .order_by('-recorded_at')[:100]
+            .values('lat', 'lng', 'recorded_at')
+        )
+        for loc in locations:
+            loc['recorded_at'] = loc['recorded_at'].isoformat()
+            loc['lat'] = str(loc['lat'])
+            loc['lng'] = str(loc['lng'])
+        return Response({
+            'active': True,
+            'tracking_starts_at': tracking_start.isoformat(),
+            'tracking_ends_at': tracking_end.isoformat(),
+            'schedule_id': schedule.id,
+            'route': f'{schedule.route.origin} → {schedule.route.destination}',
+            'locations': locations,
         })
 
 
@@ -331,6 +384,18 @@ class PaymentWebhookView(generics.GenericAPIView):
                 print(f"Failed to generate ticket for booking {booking.id}: {str(e)}")
 
         return Response({'ok': True})
+
+class BookingListView(generics.ListAPIView):
+    """GET: List authenticated user's bookings."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = BookingSerializer
+
+    def get_queryset(self):
+        return Booking.objects.filter(user=self.request.user).select_related(
+            'schedule', 'schedule__route', 'schedule__bus', 'schedule__bus__operator',
+            'boarding_point', 'dropping_point'
+        ).order_by('-created_at')
+
 
 class TicketView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]

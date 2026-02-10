@@ -106,7 +106,24 @@ export default function OperatorDashboardPage() {
             {schedules.length === 0 ? (
               <p className="text-sm text-slate-500">No schedules yet. Add a bus first, then create a schedule.</p>
             ) : (
-              <p className="text-sm text-slate-600">New schedules are PENDING until approved by admin.</p>
+              <div className="space-y-2">
+                <p className="text-sm text-slate-600">New schedules are PENDING until approved by admin.</p>
+                <ul className="space-y-1 text-xs">
+                  {(schedules as Array<{ id: number; route: { origin: string; destination: string }; departure_dt: string }>).slice(0, 3).map((s) => (
+                    <li key={s.id} className="flex items-center justify-between">
+                      <span className="text-slate-600">
+                        {s.route.origin} → {s.route.destination}
+                      </span>
+                      <Link
+                        href={`/operator/track/${s.id}`}
+                        className="text-indigo-600 hover:underline text-xs"
+                      >
+                        Track
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             <div className="mt-4">
               <Link href="/operator/schedules/new">

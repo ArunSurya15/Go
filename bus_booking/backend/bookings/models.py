@@ -56,6 +56,20 @@ class DroppingPoint(models.Model):
         return f"{self.location_name} @ {self.time}"
 
 
+class ScheduleLocation(models.Model):
+    """Live GPS position for a schedule. Tracking is typically active from 1 hour before first boarding until arrival."""
+    schedule = models.ForeignKey(Schedule, on_delete=models.CASCADE, related_name='locations')
+    lat = models.DecimalField(max_digits=9, decimal_places=6)
+    lng = models.DecimalField(max_digits=9, decimal_places=6)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-recorded_at']
+        indexes = [
+            models.Index(fields=['schedule', '-recorded_at']),
+        ]
+
+
 class Reservation(models.Model):
     STATUS_CHOICES = (
         ('PENDING', 'Pending'),

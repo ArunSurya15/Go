@@ -37,11 +37,23 @@ export default function SchedulesPage() {
       setLoading(false);
       return;
     }
+    setLoading(true);
+    setError("");
+    console.log(`Fetching schedules: route_id=${routeId}, date=${date}`);
     routes.schedules(Number(routeId), date)
-      .then(setSchedules)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load schedules."))
+      .then((s) => {
+        console.log(`Received ${s.length} schedules:`, s);
+        setSchedules(s);
+        if (s.length === 0) {
+          setError(`No buses found for ${from} → ${to} on ${date}. Make sure you've run: python manage.py seed_test_data`);
+        }
+      })
+      .catch((err) => {
+        console.error("Schedules API error:", err);
+        setError(err instanceof Error ? err.message : "Failed to load schedules. Check console for details.");
+      })
       .finally(() => setLoading(false));
-  }, [routeId, date]);
+  }, [routeId, date, from, to]);
 
   if (loading) {
     return (
@@ -82,11 +94,28 @@ export default function SchedulesPage() {
         </Button>
       </motion.div>
 
-      {error && <p className="text-destructive mb-4">{error}</p>}
+      {error && (
+        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 mb-4">
+          <p className="text-red-800 font-medium">Error</p>
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && schedules.length === 0 && (
+        <div className="rounded-md bg-yellow-50 border border-yellow-200 px-4 py-3 mb-4">
+          <p className="text-yellow-800 font-medium">No buses found</p>
+          <p className="text-yellow-700 text-sm">
+            No buses available for {from} → {to} on {date}. Try a different date or route.
+          </p>
+          <p className="text-yellow-600 text-xs mt-2">
+            Debug: route_id={routeId}, date={date}
+          </p>
+        </div>
+      )}
 
       <div className="space-y-4">
         <AnimatePresence mode="wait">
-          {schedules.length === 0 ? (
+          {schedules.length === 0 && !loading ? (
             <motion.p
               key="empty"
               initial={{ opacity: 0 }}
