@@ -1,11 +1,18 @@
-from django.core.management.base import BaseCommand
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from datetime import timedelta, datetime, time
+import json
+from datetime import datetime, time, timedelta
 
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
+from django.utils import timezone
+
+from bookings.layout_presets import (
+    LAYOUT_MIXED_SEATER_SLEEPER_1X2,
+    LAYOUT_SEATER_2X2_AISLE,
+    LAYOUT_SLEEPER_1X2_AISLE,
+)
+from bookings.models import BoardingPoint, DroppingPoint, Schedule
+from buses.models import Bus, Operator
 from common.models import Route
-from buses.models import Operator, Bus
-from bookings.models import Schedule, BoardingPoint, DroppingPoint
 
 class Command(BaseCommand):
     help = "Seed demo data: user, route, operator, bus, schedules"
@@ -44,41 +51,45 @@ class Command(BaseCommand):
         if demo_op_user and not demo_op_user.operator_id:
             demo_op_user.operator = op
             demo_op_user.save(update_fields=['operator'])
-        seat_map = {
-            "rows": 10,
-            "cols": 4,
-            "labels": ["1A","1B","1C","1D","2A","2B","2C","2D","3A","3B","3C","3D","4A","4B","4C","4D",
-                       "5A","5B","5C","5D","6A","6B","6C","6D","7A","7B","7C","7D","8A","8B","8C","8D",
-                       "9A","9B","9C","9D","10A","10B","10C","10D"]
-        }
-        import json
-        bus, _ = Bus.objects.get_or_create(
-            registration_no='KA01AB1234',
-            defaults={'operator': op, 'capacity': 40, 'seat_map_json': json.dumps(seat_map)}
-        )
 
-        # Schedules for next 3 days (two per day)
+        # Three bus types: 2x2 = 2 left + aisle + 2 right; 1x2 = 1 left + aisle + 2 right
+        buses_data = [
+            ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 40),   # Seater 2x2 (2+2 per row)
+            ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 30),  # Mixed: lower seater, upper sleeper 1x2 (1+2)
+            ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 30),   # All sleeper 1x2 (1+2)
+        ]
+        buses = []
+        for reg_no, seat_map, capacity in buses_data:
+            bus, _ = Bus.objects.update_or_create(
+                registration_no=reg_no,
+                defaults={'operator': op, 'capacity': capacity, 'seat_map_json': json.dumps(seat_map)}
+            )
+            buses.append(bus)
+
+        # Schedules for next 3 days: rotate bus type so each type gets schedules
         now = timezone.now()
         created_count = 0
         for day in range(0, 3):
             base = (now + timedelta(days=day)).date()
-            dep1 = timezone.make_aware(datetime.combine(base, datetime.min.time())) + timedelta(hours=7)   # 07:00
+            dep1 = timezone.make_aware(datetime.combine(base, datetime.min.time())) + timedelta(hours=7)
             arr1 = dep1 + timedelta(hours=8)
-            dep2 = timezone.make_aware(datetime.combine(base, datetime.min.time())) + timedelta(hours=22)  # 22:00
+            dep2 = timezone.make_aware(datetime.combine(base, datetime.min.time())) + timedelta(hours=22)
             arr2 = dep2 + timedelta(hours=8)
-
-            for dep, arr, fare in [(dep1, arr1, '899.00'), (dep2, arr2, '999.00')]:
+            # Alternate buses: day 0 bus0, day 1 bus1, day 2 bus2 for 7:00; 22:00 uses next bus
+            bus_7 = buses[day % 3]
+            bus_22 = buses[(day + 1) % 3]
+            for dep, arr, fare, bus in [(dep1, arr1, '899.00', bus_7), (dep2, arr2, '999.00', bus_22)]:
                 s, created = Schedule.objects.get_or_create(
                     bus=bus,
                     route=route,
                     departure_dt=dep,
-                    defaults={'arrival_dt': arr, 'fare': fare, 'status': 'ACTIVE'}  # ACTIVE so demo search shows them
+                    defaults={'arrival_dt': arr, 'fare': fare, 'status': 'ACTIVE'}
                 )
                 if created:
                     created_count += 1
 
         # Ensure all schedules for this route have boarding/dropping points
-        for s in Schedule.objects.filter(route=route, bus=bus).select_related('route', 'bus'):
+        for s in Schedule.objects.filter(route=route).select_related('route', 'bus'):
             if not s.boarding_points.exists():
                 for t, loc, land in [
                     (time(21, 0), 'Yelahanka', 'Mahindra Show Room Opp'),
@@ -95,6 +106,6 @@ class Command(BaseCommand):
                     DroppingPoint.objects.get_or_create(schedule=s, time=t, defaults={'location_name': loc, 'description': desc})
 
         self.stdout.write(self.style.SUCCESS(
-            f"Seeded: Route {route}, Operator {op.name}, Bus {bus.registration_no}, Schedules created: {created_count}"
+            f"Seeded: Route {route}, Operator {op.name}, 3 buses (seater 2x2, mixed, sleeper 1x2), Schedules: {created_count}"
         ))
         self.stdout.write(self.style.SUCCESS("Done."))

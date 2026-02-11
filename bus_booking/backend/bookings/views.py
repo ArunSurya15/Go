@@ -84,8 +84,17 @@ class ScheduleSeatMapView(generics.GenericAPIView):
             for r in range(1, rows + 1):
                 for c in range(cols):
                     labels.append(f"{r}{chr(65 + c)}")
-        if not types or len(types) != rows * cols:
-            types = ['seater'] * (rows * cols)
+        total = rows * cols
+        if not types or len(types) != total:
+            # Infer: empty label = aisle, else seater
+            types = []
+            for i in range(total):
+                lb = labels[i] if i < len(labels) else ""
+                types.append("aisle" if (lb == "" or lb is None) else "seater")
+        # Ensure types length matches (pad with seater if labels extended)
+        while len(types) < total:
+            types.append("seater")
+        types = types[:total]
         occupied = set()
         for r in Reservation.objects.filter(schedule=schedule, status='PENDING', expires_at__gt=timezone.now()).values_list('seat_no', flat=True):
             occupied.add(r)

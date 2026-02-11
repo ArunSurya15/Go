@@ -149,6 +149,7 @@ export default function SelectSeatsPage() {
             <SeatLayout
               layout={seatMap.layout}
               occupied={seatMap.occupied}
+              occupiedDetails={seatMap.occupied_details}
               fare={seatMap.fare}
               selected={selectedSeats}
               onSelect={handleToggleSeat}
