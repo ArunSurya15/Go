@@ -100,6 +100,54 @@ export const SeaterBeltIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+export const SeaterTopViewIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 28 28"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* Outer seat frame (shifted +2,+2) */}
+      <path
+        d="
+          M4 16
+          A2 2 0 0 1 8 16
+          L8 21
+          A1 1 0 0 0 9 22
+          L19 22
+          A1 1 0 0 0 20 21
+          L20 16
+          A2 2 0 0 1 24 16
+          L24 25
+          A1 1 0 0 1 23 26
+          L5 26
+          A1 1 0 0 1 4 25
+          Z
+        "
+      />
+
+      {/* Seat top (shifted +2,+2) */}
+      <path
+        d="
+          M6 14
+          L6 10
+          A2 2 0 0 1 8 8
+          L20 8
+          A2 2 0 0 1 22 10
+          L22 14
+        "
+      />
+    </g>
+  </svg>
+);
+
 /** Seater: chair outline only — backrest + U-shaped armrests; no enclosing rectangle. */
 /** Seater: rounded chair outline + inner U-seat (matches screenshot) */
 export const FancySeatIcon = ({ className }: { className?: string }) => (
@@ -110,10 +158,13 @@ export const FancySeatIcon = ({ className }: { className?: string }) => (
     xmlns="http://www.w3.org/2000/svg"
   >
     {/* Backrest */}
+    <rect x="25" y="0" width="12" height="5" rx="12" fill="currentColor" />
+
+    {/* Backrest */}
     <rect x="14" y="6" width="36" height="34" rx="12" fill="currentColor" />
 
     {/* Top highlight panel */}
-    <rect x="26" y="6" width="12" height="18" rx="2" fill="#E6EEF5" />
+    {/*<rect x="26" y="6" width="12" height="18" rx="2" fill="#E6EEF5" opacity="0.18"/>*/}
 
     {/* Arms (shadow behind + light arms) */}
     <rect x="7.5" y="26" width="12.5" height="12" rx="6" fill="currentColor" opacity="0.18" />
@@ -130,6 +181,216 @@ export const FancySeatIcon = ({ className }: { className?: string }) => (
     {/* Legs (darkest) */}
     <rect x="18" y="50" width="9" height="14" rx="4.5" fill="currentColor" opacity="0.55" />
     <rect x="37" y="50" width="9" height="14" rx="4.5" fill="currentColor" opacity="0.55" />
+  </svg>
+);
+
+export const FrontSeatIcon_demo = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 128 128"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <g
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* Headrest */}
+      <rect x="46" y="6" width="36" height="22" rx="6" />
+
+      {/* Backrest (slightly narrower for more arm gap) */}
+      <rect x="40" y="34" width="48" height="50" rx="12" />
+
+      {/* Armrests (moved outward to increase gap) */}
+      <rect x="12" y="38" width="18" height="48" rx="9" />
+      <rect x="98" y="38" width="18" height="48" rx="9" />
+
+      {/* Seat base */}
+      <path
+        d="
+          M32 92
+          Q64 80 96 92
+          L92 110
+          H36
+          Z
+        "
+      />
+
+      {/* Side bolsters */}
+      <path d="M32 92 L18 86 L26 110 H36 Z" />
+      <path d="M96 92 L110 86 L102 110 H92 Z" />
+
+      {/* Bottom base bar */}
+      <rect x="30" y="112" width="68" height="6" rx="3" />
+
+      {/* Legs (taller but still inside 128 viewbox) */}
+      <rect x="46" y="118" width="6" height="10" rx="3" />
+      <rect x="76" y="118" width="6" height="10" rx="3" />
+    </g>
+  </svg>
+);
+
+
+export const FrontSeatIcon_demo_1 = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 128 128"
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <g fill="currentColor">
+      {/* Headrest */}
+      <path
+        d="
+        M50 0
+        L70 0
+        A4 4 0 0 1 74 4
+        L76 16
+        A4 4 0 0 1 72 20
+        L48 20
+        A4 4 0 0 1 44 16
+        L46 4
+        A4 4 0 0 1 50 0
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* Backrest */}
+      <path
+        d="
+        M42 26
+        L78 26
+        L78 28
+        L76 30
+        L76 64
+        L44 64
+        L44 30
+        L42 28
+        L42 26
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* Left arm rest */}
+      <path
+        d="
+        M32 28
+        L40 28
+        L40 66
+        L36 68
+        L32 66
+        L32 28
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* Right arm rest */}
+      <path
+        d="
+        M80 28
+        L88 28
+        L88 66
+        L84 68
+        L80 66
+        L80 28
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* Seat bottom*/}
+      <path
+        d="
+        M36 72
+        L84 72
+        L82 92
+        L38 92
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* Seat bottom left*/}
+      <path
+        d="
+        M32 72
+        L22 68
+        L26 92
+        L32 92
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* Seat bottom right*/}
+      <path
+        d="
+        M88 72
+        L98 68
+        L94 92
+        L88 92
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* left leg*/}
+      <path
+        d="
+        M46 92
+        L40 102
+        L46 102
+        L52 92
+        Z
+      "
+        fill="currentColor"
+      />
+      {/* Right leg*/}
+      <path
+        d="
+        M74 92
+        L80 102
+        L74 102
+        L68 92
+        Z
+      "
+        fill="currentColor"
+      />
+    </g>
+  </svg>
+);
+
+
+export const FrontSeatIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 128 128"
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <g fill="currentColor">
+      {/* Headrest */}
+      <rect x="44" y="0" width="40" height="26" rx="6" />
+
+      {/* Upper backrest */}
+      <rect x="40" y="28" width="48" height="60" rx="12" />
+
+      {/* Center lower back detail */}
+      <rect x="58" y="60" width="12" height="16" rx="3" />
+
+      {/* Left arm */}
+      <rect x="20" y="36" width="18" height="56" rx="9" />
+
+      {/* Right arm */}
+      <rect x="90" y="36" width="18" height="56" rx="9" />
+
+      {/* Seat bottom (curved front edge) */}
+      <path d="
+        M26 90
+        Q64 104 102 90
+        L96 114
+        H32
+        Z
+      " />
+    </g>
   </svg>
 );
 
@@ -271,25 +532,25 @@ function DeckGrid({
             const canClick = isAvailable || isSelected;
             const gender = genderMap.get(label);
 
-            // Palette by type/gender/state
+            // Palette: icon color + opacity (fill inside SVG only, no wrapper bg)
             const palette = (() => {
               if (type === "sleeper") {
                 if (isOccupied) {
-                  if (gender === "F") return { border: "border-pink-300", fill: "bg-pink-50", icon: "text-pink-500" };
-                  if (gender === "M") return { border: "border-blue-300", fill: "bg-blue-50", icon: "text-blue-500" };
-                  return { border: "border-gray-300", fill: "bg-gray-50", icon: "text-gray-400" };
+                  if (gender === "F") return { icon: "text-pink-600/70" };
+                  if (gender === "M") return { icon: "text-blue-600/70" };
+                  return { icon: "text-gray-500/70" };
                 }
-                if (isSelected) return { border: "border-emerald-600", fill: "bg-emerald-100", icon: "text-emerald-800" };
-                return { border: "border-emerald-500", fill: "bg-white", icon: "text-emerald-600" };
+                if (isSelected) return { icon: "text-emerald-600/80" };
+                return { icon: "text-emerald-600" };
               }
               // seater / semi
               if (isOccupied) {
-                if (gender === "F") return { border: "border-pink-300", fill: "bg-pink-50", icon: "text-pink-500" };
-                if (gender === "M") return { border: "border-blue-300", fill: "bg-blue-50", icon: "text-blue-500" };
-                return { border: "border-gray-300", fill: "bg-gray-50", icon: "text-gray-400" };
+                if (gender === "F") return { icon: "text-pink-600/70" };
+                if (gender === "M") return { icon: "text-blue-600/70" };
+                return { icon: "text-gray-500/70" };
               }
-              if (isSelected) return { border: "border-emerald-600", fill: "bg-emerald-100", icon: "text-emerald-800" };
-              return { border: "border-emerald-500", fill: "bg-white", icon: "text-emerald-600" };
+              if (isSelected) return { icon: "text-emerald-600/80" };
+              return { icon: "text-emerald-600" };
             })();
 
             const isSleeper = type === "sleeper";
@@ -311,7 +572,7 @@ function DeckGrid({
                   {isSleeper ? (
                     <SleeperIcon className="h-15 w-12" />
                   ) : (
-                    <FancySeatIcon className="h-8 w-8" />
+                    <SeaterTopViewIcon className="h-8 w-8" />
                   )}
                 </div>
                 {isOccupied && <span className="text-[10px] mt-0.5 text-gray-500">Sold</span>}
@@ -401,7 +662,7 @@ function SeatTypesLegend() {
       <p className="text-sm font-semibold text-foreground mb-2">Seat symbols &amp; status</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
         <div className="space-y-0">
-          {row("Seater (chair)", <span className="text-emerald-600"><FancySeatIcon className="h-5 w-6 inline-block" /></span>)}
+          {row("Seater (chair)", <span className="text-emerald-600"><SeaterTopViewIcon className="h-5 w-6 inline-block" /></span>)}
           {row("Sleeper (berth)", <span className="text-emerald-600"><SleeperIcon className="h-6 w-4 inline-block" /></span>)}
           {row("Available", <span className="inline-block rounded border-2 border-green-500 bg-white min-w-[28px] min-h-[24px] shrink-0" />)}
           {row("Selected", <span className="inline-block rounded border-2 border-green-600 bg-green-500 min-w-[28px] min-h-[24px] shrink-0" />)}
