@@ -100,53 +100,81 @@ export const SeaterBeltIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const SeaterTopViewIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 28 28"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    <g
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Outer seat frame (shifted +2,+2) */}
-      <path
-        d="
-          M4 16
-          A2 2 0 0 1 8 16
-          L8 21
-          A1 1 0 0 0 9 22
-          L19 22
-          A1 1 0 0 0 20 21
-          L20 16
-          A2 2 0 0 1 24 16
-          L24 25
-          A1 1 0 0 1 23 26
-          L5 26
-          A1 1 0 0 1 4 25
-          Z
-        "
-      />
+type SeaterTopViewIconProps = {
+  className?: string;
+  /** Fill opacity for the filled layer (0 = no fill) */
+  fillOpacity?: number;
+  /** Stroke opacity for outline */
+  strokeOpacity?: number;
+};
 
-      {/* Seat top (shifted +2,+2) */}
-      <path
-        d="
-          M6 14
-          L6 10
-          A2 2 0 0 1 8 8
-          L20 8
-          A2 2 0 0 1 22 10
-          L22 14
-        "
-      />
-    </g>
-  </svg>
-);
+export const SeaterTopViewIcon = ({
+  className,
+  fillOpacity = 0,
+  strokeOpacity = 1,
+}: SeaterTopViewIconProps) => {
+  const outer = `
+    M4 16
+    A2 2 0 0 1 8 16
+    L8 21
+    A1 1 0 0 0 9 22
+    L19 22
+    A1 1 0 0 0 20 21
+    L20 16
+    A2 2 0 0 1 24 16
+    L24 25
+    A1 1 0 0 1 23 26
+    L5 26
+    A1 1 0 0 1 4 25
+    Z
+  `;
+
+  const top = `
+    M6 14
+    A2 2 0 0 1 8 16
+    L8 21
+    A1 1 0 0 0 9 22
+    L19 22
+    A1 1 0 0 0 20 21
+    L20 16
+    A2 2 0 0 1 22 14
+    L22 10
+    A2 2 0 0 0 20 8
+    L8 8
+    A2 2 0 0 0 6 10
+    Z
+  `;
+
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 28 28"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Fill layer (behind) */}
+      {fillOpacity > 0 && (
+        <g fill="currentColor" opacity={fillOpacity}>
+          <path d={outer} />
+          <path d={top} />
+        </g>
+      )}
+
+      {/* Stroke layer (front) */}
+      <g
+        fill="none"
+        stroke="currentColor"
+        opacity={strokeOpacity}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d={outer} />
+        <path d={top} />
+      </g>
+    </svg>
+  );
+};
 
 /** Seater: chair outline only — backrest + U-shaped armrests; no enclosing rectangle. */
 /** Seater: rounded chair outline + inner U-seat (matches screenshot) */
@@ -532,18 +560,9 @@ function DeckGrid({
             const canClick = isAvailable || isSelected;
             const gender = genderMap.get(label);
 
-            // Palette: icon color + opacity (fill inside SVG only, no wrapper bg)
+            // Sleeper: palette for icon color
             const palette = (() => {
-              if (type === "sleeper") {
-                if (isOccupied) {
-                  if (gender === "F") return { icon: "text-pink-600/70" };
-                  if (gender === "M") return { icon: "text-blue-600/70" };
-                  return { icon: "text-gray-500/70" };
-                }
-                if (isSelected) return { icon: "text-emerald-600/80" };
-                return { icon: "text-emerald-600" };
-              }
-              // seater / semi
+              if (type !== "sleeper") return null;
               if (isOccupied) {
                 if (gender === "F") return { icon: "text-pink-600/70" };
                 if (gender === "M") return { icon: "text-blue-600/70" };
@@ -551,6 +570,18 @@ function DeckGrid({
               }
               if (isSelected) return { icon: "text-emerald-600/80" };
               return { icon: "text-emerald-600" };
+            })();
+
+            // Seater: fill + outline via seatVisual (cls = Tailwind color, fill = fill opacity 0–1)
+            const seatVisual = (() => {
+              if (type === "sleeper") return null;
+              if (isSelected) return { cls: "text-emerald-700", fill: 0.5 };
+              if (isOccupied) {
+                if (gender === "F") return { cls: "text-pink-600", fill: 0.5 };
+                if (gender === "M") return { cls: "text-blue-600", fill: 0.5 };
+                return { cls: "text-gray-500", fill: 0.5 };
+              }
+              return { cls: "text-emerald-700", fill: 0 };
             })();
 
             const isSleeper = type === "sleeper";
@@ -568,11 +599,11 @@ function DeckGrid({
                 `}
                 style={{ minHeight: uniformRowPx }}
               >
-                <div className={`flex items-center justify-center shrink-0 ${palette.icon}`}>
+                <div className={`flex items-center justify-center shrink-0 ${isSleeper ? palette!.icon : seatVisual!.cls}`}>
                   {isSleeper ? (
                     <SleeperIcon className="h-15 w-12" />
                   ) : (
-                    <SeaterTopViewIcon className="h-8 w-8" />
+                    <SeaterTopViewIcon className="h-8 w-8" fillOpacity={seatVisual!.fill} />
                   )}
                 </div>
                 {isOccupied && <span className="text-[10px] mt-0.5 text-gray-500">Sold</span>}
