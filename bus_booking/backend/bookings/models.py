@@ -111,6 +111,7 @@ class Booking(models.Model):
     contact_phone = models.CharField(max_length=20, blank=True)
     state_of_residence = models.CharField(max_length=100, blank=True)
     whatsapp_opt_in = models.BooleanField(default=False)
+    passenger_details = models.TextField(blank=True, default="{}")  # JSON: {"1A": {"gender": "F"}, ...}
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

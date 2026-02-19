@@ -52,33 +52,37 @@ class Command(BaseCommand):
             demo_op_user.operator = op
             demo_op_user.save(update_fields=['operator'])
 
-        # Three bus types: 2x2 = 2 left + aisle + 2 right; 1x2 = 1 left + aisle + 2 right
+        # Three bus types: seater 2x2, mixed (lower seater / upper sleeper), all sleeper
         buses_data = [
-            ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 40),   # Seater 2x2 (2+2 per row)
-            ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 30),  # Mixed: lower seater, upper sleeper 1x2 (1+2)
-            ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 30),   # All sleeper 1x2 (1+2)
+            ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 40, 'Seater 2x2'),
+            ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 30, 'Mixed (lower seater, upper sleeper)'),
+            ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 30, 'Sleeper 1x2'),
         ]
         buses = []
-        for reg_no, seat_map, capacity in buses_data:
+        bus_seater = bus_mixed = bus_sleeper = None
+        for reg_no, seat_map, capacity, _ in buses_data:
             bus, _ = Bus.objects.update_or_create(
                 registration_no=reg_no,
                 defaults={'operator': op, 'capacity': capacity, 'seat_map_json': json.dumps(seat_map)}
             )
             buses.append(bus)
+        bus_seater, bus_mixed, bus_sleeper = buses[0], buses[1], buses[2]
 
-        # Schedules for next 3 days: rotate bus type so each type gets schedules
+        # Schedules for next 3 days: each day has one schedule per bus type so all three are bookable
+        # 7:00 = Seater, 10:00 = Mixed, 14:00 = Sleeper, 22:00 = Seater again
         now = timezone.now()
         created_count = 0
+        schedule_times = [
+            (7, 0, bus_seater, '899.00'),    # Seater 2x2
+            (10, 0, bus_mixed, '950.00'),    # Mixed: lower seater, upper sleeper
+            (14, 0, bus_sleeper, '999.00'),  # Sleeper
+            (22, 0, bus_seater, '999.00'),   # Seater night
+        ]
         for day in range(0, 3):
             base = (now + timedelta(days=day)).date()
-            dep1 = timezone.make_aware(datetime.combine(base, datetime.min.time())) + timedelta(hours=7)
-            arr1 = dep1 + timedelta(hours=8)
-            dep2 = timezone.make_aware(datetime.combine(base, datetime.min.time())) + timedelta(hours=22)
-            arr2 = dep2 + timedelta(hours=8)
-            # Alternate buses: day 0 bus0, day 1 bus1, day 2 bus2 for 7:00; 22:00 uses next bus
-            bus_7 = buses[day % 3]
-            bus_22 = buses[(day + 1) % 3]
-            for dep, arr, fare, bus in [(dep1, arr1, '899.00', bus_7), (dep2, arr2, '999.00', bus_22)]:
+            for dep_h, dep_m, bus, fare in schedule_times:
+                dep = timezone.make_aware(datetime.combine(base, time(dep_h, dep_m)))
+                arr = dep + timedelta(hours=8)
                 s, created = Schedule.objects.get_or_create(
                     bus=bus,
                     route=route,
@@ -106,6 +110,9 @@ class Command(BaseCommand):
                     DroppingPoint.objects.get_or_create(schedule=s, time=t, defaults={'location_name': loc, 'description': desc})
 
         self.stdout.write(self.style.SUCCESS(
-            f"Seeded: Route {route}, Operator {op.name}, 3 buses (seater 2x2, mixed, sleeper 1x2), Schedules: {created_count}"
+            f"Seeded: Route {route}, Operator {op.name}, 3 buses, {created_count} schedules"
+        ))
+        self.stdout.write(self.style.SUCCESS(
+            "Buses: KA01AB1234 (Seater 2x2) | KA02ST5678 (Mixed: lower seater, upper sleeper) | KA03SL9012 (Sleeper)"
         ))
         self.stdout.write(self.style.SUCCESS("Done."))

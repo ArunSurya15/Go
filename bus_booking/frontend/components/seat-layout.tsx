@@ -440,17 +440,28 @@ const SeaterIcon = ({ className }: { className?: string }) => (
     <path d="M9 12.2v2.8a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2.8" />
   </svg>
 );
-/** Sleeper: tall rounded berth + filled rounded bar at bottom (matches screenshot) */
-const SleeperIcon = ({ className }: { className?: string }) => (
+/** Sleeper: tall rounded berth. Optional fill layer (like SeaterTopViewIcon) when fillOpacity > 0. */
+const SleeperIcon = ({
+  className,
+  strokeWidth = 0.8,
+  fillOpacity = 0,
+}: { className?: string; strokeWidth?: number; fillOpacity?: number }) => (
   <svg
     className={className}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="1.2"
+    strokeWidth={strokeWidth}
     strokeLinecap="round"
     strokeLinejoin="round"
   >
+    {/* Fill layer (behind) when selected */}
+    {fillOpacity > 0 && (
+      <g fill="currentColor" opacity={fillOpacity}>
+        <rect x="6" y="3.5" width="12" height="17" rx="2.6" />
+      </g>
+    )}
+    {/* Stroke layer (front) */}
     <rect x="6" y="3.5" width="12" height="17" rx="2.6" />
     {/* Bottom cushion bar (filled, no stroke) */}
     <rect x="7.6" y="15.8" width="8.8" height="2.8" rx="1.4" fill="currentColor" opacity="0.18" stroke="none" />
@@ -560,28 +571,28 @@ function DeckGrid({
             const canClick = isAvailable || isSelected;
             const gender = genderMap.get(label);
 
-            // Sleeper: palette for icon color
+            // Sleeper: palette for icon color + fill (same as seater when selected)
             const palette = (() => {
               if (type !== "sleeper") return null;
               if (isOccupied) {
-                if (gender === "F") return { icon: "text-pink-600/70" };
-                if (gender === "M") return { icon: "text-blue-600/70" };
-                return { icon: "text-gray-500/70" };
+                if (gender === "F") return { icon: "text-pink-200", fill: 0.5 };
+                if (gender === "M") return { icon: "text-blue-200", fill: 0.5 };
+                return { icon: "text-gray-500", fill: 0.5 };
               }
-              if (isSelected) return { icon: "text-emerald-600/80" };
-              return { icon: "text-emerald-600" };
+              if (isSelected) return { icon: "text-green-800", fill: 0.5 };
+              return { icon: "text-green-700", fill: 0 };
             })();
 
-            // Seater: fill + outline via seatVisual (cls = Tailwind color, fill = fill opacity 0–1)
+            // Seater: fill + outline via seatVisual. Use same green as legend (Available=green-500, Selected=green-600).
             const seatVisual = (() => {
               if (type === "sleeper") return null;
-              if (isSelected) return { cls: "text-emerald-700", fill: 0.5 };
+              if (isSelected) return { cls: "text-green-800", fill: 0.5 };
               if (isOccupied) {
-                if (gender === "F") return { cls: "text-pink-600", fill: 0.5 };
-                if (gender === "M") return { cls: "text-blue-600", fill: 0.5 };
+                if (gender === "F") return { cls: "text-pink-200", fill: 0.5 };
+                if (gender === "M") return { cls: "text-blue-200", fill: 0.5 };
                 return { cls: "text-gray-500", fill: 0.5 };
               }
-              return { cls: "text-emerald-700", fill: 0 };
+              return { cls: "text-green-700", fill: 0 };
             })();
 
             const isSleeper = type === "sleeper";
@@ -595,15 +606,15 @@ function DeckGrid({
                 className={`
                   relative flex flex-col items-center justify-center w-full min-w-0
                   transition-colors text-xs font-medium
-                  ${isOccupied ? "text-gray-500 cursor-not-allowed" : "text-emerald-800"}
+                  ${isOccupied ? "text-gray-500 cursor-not-allowed" : "text-green-800"}
                 `}
                 style={{ minHeight: uniformRowPx }}
               >
                 <div className={`flex items-center justify-center shrink-0 ${isSleeper ? palette!.icon : seatVisual!.cls}`}>
                   {isSleeper ? (
-                    <SleeperIcon className="h-15 w-12" />
+                    <SleeperIcon className="h-[4.5rem] w-[3rem]" strokeWidth={0.8} fillOpacity={palette!.fill ?? 0} />
                   ) : (
-                    <SeaterTopViewIcon className="h-8 w-8" fillOpacity={seatVisual!.fill} />
+                    <SeaterTopViewIcon className="h-12 w-12" fillOpacity={seatVisual!.fill} />
                   )}
                 </div>
                 {isOccupied && <span className="text-[10px] mt-0.5 text-gray-500">Sold</span>}
@@ -682,9 +693,10 @@ export function SeatLayout({ layout, occupied, occupiedDetails, fare, selected, 
 
 /** Legend: symbols + availability states (no labels on individual seats). */
 function SeatTypesLegend() {
+  const symbolWidth = "min-w-[3.5rem] w-[3.5rem]";
   const row = (label: string, node: React.ReactNode) => (
-    <div key={label} className="flex items-center gap-2 py-1">
-      {node}
+    <div key={label} className="flex items-center gap-3 py-1">
+      <span className={`flex items-center justify-center shrink-0 ${symbolWidth}`}>{node}</span>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );
@@ -693,8 +705,8 @@ function SeatTypesLegend() {
       <p className="text-sm font-semibold text-foreground mb-2">Seat symbols &amp; status</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
         <div className="space-y-0">
-          {row("Seater (chair)", <span className="text-emerald-600"><SeaterTopViewIcon className="h-5 w-6 inline-block" /></span>)}
-          {row("Sleeper (berth)", <span className="text-emerald-600"><SleeperIcon className="h-6 w-4 inline-block" /></span>)}
+          {row("Seater (chair)", <span className="text-green-700"><SeaterTopViewIcon className="h-8 w-8 inline-block" fillOpacity={0} /></span>)}
+          {row("Sleeper (berth)", <span className="text-green-700"><SleeperIcon className="h-[4rem] w-[2.5rem] inline-block" strokeWidth={0.8} /></span>)}
           {row("Available", <span className="inline-block rounded border-2 border-green-500 bg-white min-w-[28px] min-h-[24px] shrink-0" />)}
           {row("Selected", <span className="inline-block rounded border-2 border-green-600 bg-green-500 min-w-[28px] min-h-[24px] shrink-0" />)}
           {row("Sold", <span className="inline-block rounded border-2 border-gray-300 bg-gray-100 min-w-[28px] min-h-[24px] shrink-0" />)}

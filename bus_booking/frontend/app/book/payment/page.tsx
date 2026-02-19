@@ -36,6 +36,7 @@ export default function PaymentPage() {
     contact_phone?: string;
     state_of_residence?: string;
     whatsapp_opt_in?: boolean;
+    passengers?: Record<string, { name?: string; age?: string; gender?: string }>;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -54,15 +55,18 @@ export default function PaymentPage() {
     setError("");
     setLoading(true);
     try {
+      const raw = typeof window !== "undefined" ? sessionStorage.getItem(FLOW_KEY) : null;
+      const latestFlow = raw ? JSON.parse(raw) : flow;
       const payload = {
-        schedule_id: flow.schedule_id,
-        seats: flow.seats,
-        amount: flow.amount || String(parseFloat(flow.fare || "0") * flow.seats.length),
-        boarding_point_id: flow.boarding_point_id,
-        dropping_point_id: flow.dropping_point_id,
-        contact_phone: flow.contact_phone || "",
-        state_of_residence: flow.state_of_residence || "",
-        whatsapp_opt_in: flow.whatsapp_opt_in ?? false,
+        schedule_id: latestFlow.schedule_id ?? flow.schedule_id,
+        seats: latestFlow.seats ?? flow.seats,
+        amount: latestFlow.amount || flow.amount || String(parseFloat(flow.fare || "0") * (flow.seats?.length ?? 0)),
+        boarding_point_id: latestFlow.boarding_point_id ?? flow.boarding_point_id,
+        dropping_point_id: latestFlow.dropping_point_id ?? flow.dropping_point_id,
+        contact_phone: latestFlow.contact_phone ?? flow.contact_phone ?? "",
+        state_of_residence: latestFlow.state_of_residence ?? flow.state_of_residence ?? "",
+        whatsapp_opt_in: latestFlow.whatsapp_opt_in ?? flow.whatsapp_opt_in ?? false,
+        passengers: latestFlow.passengers ?? flow.passengers ?? undefined,
       };
       const res = await booking.createPayment(token, payload);
       setFlow((f) => (f ? { ...f, order_id: res.order_id, booking_id: res.booking_id } : f));
