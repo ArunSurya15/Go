@@ -14,158 +14,101 @@ type SeatLayoutProps = {
 type CellType = "seater" | "sleeper" | "semi_sleeper" | "aisle" | "";
 type CellInfo = { label: string; type: CellType };
 
-/**
- * Seater (person sitting with belt) — closer to the reference silhouette.
- * - Black part uses currentColor
- * - Belt uses white (so it pops on green/blue/pink states)
- */
-export const SeaterBeltIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 128 128"
-    aria-hidden="true"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    {/* ====== SOLID SILHOUETTE (currentColor) ====== */}
-    <g fill="currentColor">
-      {/* Head */}
-      <circle cx="86" cy="30" r="16" />
+// ============================================================================
+// CONFIGURABLE SPACING VARIABLES
+// ============================================================================
 
-      {/* Seat back (tall rounded) */}
-      <rect x="20" y="10" width="22" height="64" rx="10" />
-
-      {/* Backrest top pad (small vertical block) */}
-      <rect x="20" y="6" width="22" height="18" rx="9" />
-
-      {/* Torso (leaning into seat) */}
-      <path d="
-        M56 46
-        C60 34, 74 28, 86 34
-        C96 39, 100 52, 94 62
-        C90 69, 82 72, 74 70
-        C66 68, 60 62, 56 54
-        C54 50, 54 48, 56 46
-        Z" />
-
-      {/* Arm (single curved arm down to lap) */}
-      <path d="
-        M90 58
-        C98 64, 102 74, 98 84
-        C95 92, 86 96, 78 92
-        C71 88, 67 80, 70 72
-        C73 64, 82 56, 90 58
-        Z" />
-
-      {/* Seat base */}
-      <path d="
-        M36 74
-        H86
-        C100 74, 112 86, 112 100
-        V104
-        H54
-        C44 104, 36 96, 36 86
-        Z" />
-
-      {/* Leg (vertical rounded) */}
-      <path d="
-        M92 86
-        H112
-        V122
-        C112 126, 109 128, 104 128
-        H100
-        C95 128, 92 126, 92 122
-        Z" />
-
-      {/* Bottom base/shadow bar */}
-      <rect x="30" y="108" width="76" height="10" rx="5" />
-    </g>
-
-    {/* ====== SEATBELT (white) ====== */}
-    <g
-      fill="none"
-      stroke="#fff"
-      strokeWidth="7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      opacity="0.95"
-    >
-      {/* diagonal belt */}
-      <path d="M50 62 L84 94" />
-      {/* lap belt */}
-      <path d="M46 96 L92 70" />
-    </g>
-
-    {/* buckle dot */}
-    <circle cx="70" cy="84" r="5" fill="#fff" opacity="0.98" />
-  </svg>
-);
-
-type SeaterTopViewIconProps = {
-  className?: string;
-  /** Fill opacity for the filled layer (0 = no fill) */
-  fillOpacity?: number;
-  /** Stroke opacity for outline */
-  strokeOpacity?: number;
+const SPACING_CONFIG = {
+  // Seat icon dimensions
+  SEATER_ICON_PX: 32,
+  SLEEPER_ICON_HEIGHT_PX: 80,  // Increased from 108 to make it taller
+  SLEEPER_ICON_ASPECT: 12 / 22, // New viewBox ratio: width 12 / height 22 (includes 1px padding)
+  
+  // Spacing around seats (padding inside each seat cell)
+  SEAT_HORIZONTAL_PADDING: 2,   // Minimal left/right padding (set to 0 for no padding)
+  SEAT_VERTICAL_PADDING: 0,     // Minimal top/bottom padding (set to 0 for no padding)
+  
+  // Gap between seat icon and price
+  ICON_TO_PRICE_GAP: 2,         // Small gap between seat and price (set to 0 for no gap)
+  
+  // Grid gaps (spacing between grid cells)
+  ROW_GAP: 8,                   // Vertical space between rows (set to 0 for no gap)
+  COLUMN_GAP: 1,                // Horizontal space between columns (set to 0 for no gap)
+  AISLE_WIDTH: 32,              // Width of aisle columns
+  
+  // Steering wheel row
+  STEERING_ROW_HEIGHT: 48,
+  
+  // Deck container spacing
+  DECK_PADDING: 12,
+  DECK_GAP: 16,                 // Gap between lower and upper deck
 };
 
+/**
+ * Seater Top View Icon - compact chair outline
+ */
 export const SeaterTopViewIcon = ({
   className,
   fillOpacity = 0,
   strokeOpacity = 1,
-}: SeaterTopViewIconProps) => {
+  strokeWidth = 1,
+}: {
+  className?: string;
+  fillOpacity?: number;
+  strokeOpacity?: number;
+  strokeWidth?: number;
+}) => {
+  // Paths with 1px padding to prevent stroke clipping
   const outer = `
-    M4 16
-    A2 2 0 0 1 8 16
-    L8 21
-    A1 1 0 0 0 9 22
-    L19 22
-    A1 1 0 0 0 20 21
-    L20 16
-    A2 2 0 0 1 24 16
-    L24 25
-    A1 1 0 0 1 23 26
-    L5 26
-    A1 1 0 0 1 4 25
+    M1 13
+    A2 2 0 0 1 5 13
+    L5 18
+    A1 1 0 0 0 6 19
+    L16 19
+    A1 1 0 0 0 17 18
+    L17 13
+    A2 2 0 0 1 21 13
+    L21 22
+    A1 1 0 0 1 20 23
+    L2 23
+    A1 1 0 0 1 1 22
     Z
   `;
 
   const top = `
-    M6 14
-    A2 2 0 0 1 8 16
-    L8 21
-    A1 1 0 0 0 9 22
-    L19 22
-    A1 1 0 0 0 20 21
-    L20 16
-    A2 2 0 0 1 22 14
-    L22 10
-    A2 2 0 0 0 20 8
-    L8 8
-    A2 2 0 0 0 6 10
+    M3 11
+    A2 2 0 0 1 5 13
+    L5 18
+    A1 1 0 0 0 6 19
+    L16 19
+    A1 1 0 0 0 17 18
+    L17 13
+    A2 2 0 0 1 19 11
+    L19 7
+    A2 2 0 0 0 17 5
+    L5 5
+    A2 2 0 0 0 3 7
     Z
   `;
 
   return (
     <svg
       className={className}
-      viewBox="0 0 28 28"
+      viewBox="0 0 22 24"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      {/* Fill layer (behind) */}
       {fillOpacity > 0 && (
         <g fill="currentColor" opacity={fillOpacity}>
           <path d={outer} />
           <path d={top} />
         </g>
       )}
-
-      {/* Stroke layer (front) */}
       <g
         fill="none"
         stroke="currentColor"
         opacity={strokeOpacity}
-        strokeWidth="2"
+        strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
       >
@@ -176,299 +119,104 @@ export const SeaterTopViewIcon = ({
   );
 };
 
-/** Seater: chair outline only — backrest + U-shaped armrests; no enclosing rectangle. */
-/** Seater: rounded chair outline + inner U-seat (matches screenshot) */
-export const FancySeatIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 64 64"
-    aria-hidden="true"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    {/* Backrest */}
-    <rect x="25" y="0" width="12" height="5" rx="12" fill="currentColor" />
-
-    {/* Backrest */}
-    <rect x="14" y="6" width="36" height="34" rx="12" fill="currentColor" />
-
-    {/* Top highlight panel */}
-    {/*<rect x="26" y="6" width="12" height="18" rx="2" fill="#E6EEF5" opacity="0.18"/>*/}
-
-    {/* Arms (shadow behind + light arms) */}
-    <rect x="7.5" y="26" width="12.5" height="12" rx="6" fill="currentColor" opacity="0.18" />
-    <rect x="44" y="26" width="12.5" height="12" rx="6" fill="currentColor" opacity="0.18" />
-    <rect x="9" y="24" width="12.5" height="12" rx="6" fill="currentColor" opacity="0.28" />
-    <rect x="42.5" y="24" width="12.5" height="12" rx="6" fill="currentColor" opacity="0.28" />
-
-    {/* Seat cushion (lighter) */}
-    <rect x="16" y="34" width="32" height="10" rx="4" fill="currentColor" opacity="0.72" />
-
-    {/* Seat base (darker) */}
-    <rect x="14" y="40" width="36" height="14" rx="4" fill="currentColor" opacity="0.9" />
-
-    {/* Legs (darkest) */}
-    <rect x="18" y="50" width="9" height="14" rx="4.5" fill="currentColor" opacity="0.55" />
-    <rect x="37" y="50" width="9" height="14" rx="4.5" fill="currentColor" opacity="0.55" />
-  </svg>
-);
-
-export const FrontSeatIcon_demo = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 128 128"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <g
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Headrest */}
-      <rect x="46" y="6" width="36" height="22" rx="6" />
-
-      {/* Backrest (slightly narrower for more arm gap) */}
-      <rect x="40" y="34" width="48" height="50" rx="12" />
-
-      {/* Armrests (moved outward to increase gap) */}
-      <rect x="12" y="38" width="18" height="48" rx="9" />
-      <rect x="98" y="38" width="18" height="48" rx="9" />
-
-      {/* Seat base */}
-      <path
-        d="
-          M32 92
-          Q64 80 96 92
-          L92 110
-          H36
-          Z
-        "
-      />
-
-      {/* Side bolsters */}
-      <path d="M32 92 L18 86 L26 110 H36 Z" />
-      <path d="M96 92 L110 86 L102 110 H92 Z" />
-
-      {/* Bottom base bar */}
-      <rect x="30" y="112" width="68" height="6" rx="3" />
-
-      {/* Legs (taller but still inside 128 viewbox) */}
-      <rect x="46" y="118" width="6" height="10" rx="3" />
-      <rect x="76" y="118" width="6" height="10" rx="3" />
-    </g>
-  </svg>
-);
-
-
-export const FrontSeatIcon_demo_1 = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 128 128"
-    aria-hidden="true"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <g fill="currentColor">
-      {/* Headrest */}
-      <path
-        d="
-        M50 0
-        L70 0
-        A4 4 0 0 1 74 4
-        L76 16
-        A4 4 0 0 1 72 20
-        L48 20
-        A4 4 0 0 1 44 16
-        L46 4
-        A4 4 0 0 1 50 0
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* Backrest */}
-      <path
-        d="
-        M42 26
-        L78 26
-        L78 28
-        L76 30
-        L76 64
-        L44 64
-        L44 30
-        L42 28
-        L42 26
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* Left arm rest */}
-      <path
-        d="
-        M32 28
-        L40 28
-        L40 66
-        L36 68
-        L32 66
-        L32 28
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* Right arm rest */}
-      <path
-        d="
-        M80 28
-        L88 28
-        L88 66
-        L84 68
-        L80 66
-        L80 28
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* Seat bottom*/}
-      <path
-        d="
-        M36 72
-        L84 72
-        L82 92
-        L38 92
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* Seat bottom left*/}
-      <path
-        d="
-        M32 72
-        L22 68
-        L26 92
-        L32 92
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* Seat bottom right*/}
-      <path
-        d="
-        M88 72
-        L98 68
-        L94 92
-        L88 92
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* left leg*/}
-      <path
-        d="
-        M46 92
-        L40 102
-        L46 102
-        L52 92
-        Z
-      "
-        fill="currentColor"
-      />
-      {/* Right leg*/}
-      <path
-        d="
-        M74 92
-        L80 102
-        L74 102
-        L68 92
-        Z
-      "
-        fill="currentColor"
-      />
-    </g>
-  </svg>
-);
-
-
-export const FrontSeatIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 128 128"
-    aria-hidden="true"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <g fill="currentColor">
-      {/* Headrest */}
-      <rect x="44" y="0" width="40" height="26" rx="6" />
-
-      {/* Upper backrest */}
-      <rect x="40" y="28" width="48" height="60" rx="12" />
-
-      {/* Center lower back detail */}
-      <rect x="58" y="60" width="12" height="16" rx="3" />
-
-      {/* Left arm */}
-      <rect x="20" y="36" width="18" height="56" rx="9" />
-
-      {/* Right arm */}
-      <rect x="90" y="36" width="18" height="56" rx="9" />
-
-      {/* Seat bottom (curved front edge) */}
-      <path d="
-        M26 90
-        Q64 104 102 90
-        L96 114
-        H32
-        Z
-      " />
-    </g>
-  </svg>
-);
-
-const SeaterIcon = ({ className }: { className?: string }) => (
-  <svg
-    className={className}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    {/* Outer chair: backrest + armrests + base */}
-    <path d="M8.5 6.5A2.5 2.5 0 0 1 11 4h2a2.5 2.5 0 0 1 2.5 2.5V10c0 1.1-.9 2-2 2H8.5Z" />
-    <path d="M7 11v6a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-6" />
-
-    {/* Inner seat: U shape */}
-    <path d="M9 12.2v2.8a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2.8" />
-  </svg>
-);
-/** Sleeper: tall rounded berth. Optional fill layer (like SeaterTopViewIcon) when fillOpacity > 0. */
+/**
+ * Sleeper Icon - tall rounded berth
+ */
 const SleeperIcon = ({
   className,
-  strokeWidth = 0.8,
+  style,
+  strokeWidth = 0.5,
   fillOpacity = 0,
-}: { className?: string; strokeWidth?: number; fillOpacity?: number }) => (
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+  strokeWidth?: number;
+  fillOpacity?: number;
+}) => (
   <svg
     className={className}
-    viewBox="0 0 24 24"
+    style={style}
+    viewBox="0 0 12 22"
     fill="none"
     stroke="currentColor"
     strokeWidth={strokeWidth}
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    {/* Fill layer (behind) when selected */}
     {fillOpacity > 0 && (
       <g fill="currentColor" opacity={fillOpacity}>
-        <rect x="6" y="3.5" width="12" height="17" rx="2.6" />
+        <rect x="1" y="1" width="10" height="20" rx="2" />
       </g>
     )}
-    {/* Stroke layer (front) */}
-    <rect x="6" y="3.5" width="12" height="17" rx="2.6" />
-    {/* Bottom cushion bar (filled, no stroke) */}
-    <rect x="7.6" y="15.8" width="8.8" height="2.8" rx="1.4" fill="currentColor" opacity="0.18" stroke="none" />
+    <rect x="1" y="1" width="10" height="20" rx="2" />
+    <rect
+      x="2.2"
+      y="15.5"
+      width="7.6"
+      height="2.8"
+      rx="1"
+      fill="currentColor"
+      opacity="0.18"
+      stroke="none"
+    />
   </svg>
 );
 
-/** Splits layout into lower and upper deck by row (first half = lower). */
+/**
+ * Steering Wheel Icon
+ */
+function SteeringWheelIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 32 32"
+      aria-hidden
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <mask id="steeringMask">
+          <rect width="32" height="32" fill="white" />
+          <circle cx="16" cy="18" r="2" fill="black" />
+          <path
+            fill="black"
+            d="
+              M 8.0 13.0
+              Q 16.0 3.5 24.0 13.0
+              Q 21.2 15.2 16.0 13
+              Q 10.8 15.2 8.0 13.0
+              Z
+            "
+          />
+          <path
+            fill="black"
+            d="
+              M 7.8 18.2
+              Q 8.6 24.8 14.2 24.6
+              Q 13.2 20.4 10.8 18.0
+              Q 9.2 16.4 7.8 18.2
+              Z
+            "
+          />
+          <path
+            fill="black"
+            d="
+              M 24.2 18.2
+              Q 23.4 24.8 17.8 24.6
+              Q 18.8 20.4 21.2 18.0
+              Q 22.8 16.4 24.2 18.2
+              Z
+            "
+          />
+        </mask>
+      </defs>
+      <circle cx="16" cy="16" r="11.7" fill="currentColor" mask="url(#steeringMask)" />
+    </svg>
+  );
+}
+
+/**
+ * Splits layout into lower and upper deck by row
+ */
 function splitDecks(
   rows: number,
   cols: number,
@@ -478,6 +226,7 @@ function splitDecks(
   const half = Math.ceil(rows / 2);
   const lower: CellInfo[][] = [];
   const upper: CellInfo[][] = [];
+  
   for (let r = 0; r < rows; r++) {
     const rowCells: CellInfo[] = [];
     for (let c = 0; c < cols; c++) {
@@ -489,14 +238,13 @@ function splitDecks(
     if (r < half) lower.push(rowCells);
     else upper.push(rowCells);
   }
+  
   return { lower, upper };
 }
 
-// Row height per deck (px). Set equal for same-length decks; set different to adjust lower vs upper berth height.
-const LOWER_DECK_ROW_PX = 70;
-const UPPER_DECK_ROW_PX = 70;
-
-/** Renders seats in vertical columns (each column = seats stacked top to bottom). */
+/**
+ * Renders seats in vertical columns
+ */
 function DeckGrid({
   rows,
   occupiedSet,
@@ -518,119 +266,228 @@ function DeckGrid({
 }) {
   const cols = rows[0]?.length ?? 0;
   const numRows = rows.length;
+  
   if (cols === 0 || numRows === 0) return null;
+  
   const fareInt = Math.round(Number(fare)) || 0;
-  const colWidthPx = 28;
-  const aisleWidthPx = 20;
-  const colWidths = rows[0].map((cell) => (cell?.label ? colWidthPx : aisleWidthPx));
-  const uniformRowPx = deckType === "upper" ? UPPER_DECK_ROW_PX : LOWER_DECK_ROW_PX;
-  const steeringRowPx = 48;
-  const rowTemplate = steeringInTopRight
-    ? `${steeringRowPx}px repeat(${numRows}, ${uniformRowPx}px)`
-    : `repeat(${numRows}, ${uniformRowPx}px)`;
+  const isSleeperDeck = rows.every((row) => 
+    row.every((c) => !c?.label || (c.type ?? "seater") === "sleeper")
+  );
+  
+  // Calculate dimensions - just the icon size, no extra padding in column width
+  const sleeperW = Math.round(
+    SPACING_CONFIG.SLEEPER_ICON_HEIGHT_PX * SPACING_CONFIG.SLEEPER_ICON_ASPECT
+  );
+  
+  const seatIconWidth = isSleeperDeck ? sleeperW : SPACING_CONFIG.SEATER_ICON_PX;
+  const aisleWidthPx = SPACING_CONFIG.AISLE_WIDTH;
+  
   return (
     <div
-      className="grid gap-0.5 w-fit"
+      className="inline-grid items-start"
       style={{
-        gridTemplateColumns: colWidths.map((w) => `${w}px`).join(" "),
-        gridTemplateRows: rowTemplate,
-        gridAutoFlow: "column",
+        gridTemplateColumns: `repeat(${cols}, min-content)`,
+        gridTemplateRows: steeringInTopRight 
+          ? `${SPACING_CONFIG.STEERING_ROW_HEIGHT}px repeat(${numRows}, min-content)`
+          : `repeat(${numRows}, min-content)`,
+        columnGap: `${SPACING_CONFIG.COLUMN_GAP}px`,
+        rowGap: `${SPACING_CONFIG.ROW_GAP}px`,
       }}
     >
-      {Array.from({ length: cols }, (_, c) => {
-        const cells: React.ReactNode[] = [];
-        const colW = colWidths[c] ?? colWidthPx;
-        if (steeringInTopRight) {
-          if (c < cols - 1) {
-            cells.push(<div key={`empty-${c}`} style={{ minWidth: colW }} />);
-          } else {
-            cells.push(
-              <div
-                key="steering"
-                className="flex items-center justify-center pb-2 text-gray-400"
-                style={{ minWidth: colW }}
-                title="Bus direction (front)"
-              >
-                <SteeringWheelIcon className="h-[3.25rem] w-[3.25rem]" />
-              </div>
+      {/* Render grid row by row, column by column */}
+      {steeringInTopRight && Array.from({ length: cols }, (_, c) => {
+        if (c === cols - 1) {
+          return (
+            <div
+              key="steering"
+              className="flex items-center justify-center text-gray-400"
+              title="Bus direction (front)"
+            >
+              <SteeringWheelIcon className="h-7 w-7" />
+            </div>
+          );
+        }
+        return <div key={`empty-${c}`} />;
+      })}
+      
+      {rows.map((row, r) =>
+        row.map((cell, c) => {
+          // Aisle cell
+          if (!cell?.label) {
+            return (
+              <div 
+                key={`aisle-${r}-${c}`} 
+                style={{ width: aisleWidthPx }} 
+                aria-hidden 
+              />
             );
           }
-        }
-        for (let r = 0; r < numRows; r++) {
-          const cell = rows[r]?.[c];
-          if (cell && !cell.label) {
-            cells.push(
-              <div key={`aisle-${c}-${r}`} style={{ minHeight: uniformRowPx, minWidth: colW }} aria-hidden />
-            );
-          } else if (cell?.label) {
-            const label = cell.label;
-            const type = cell.type ?? "seater";
-            const isOccupied = occupiedSet.has(label);
-            const isSelected = selectedSet.has(label);
-            const isAvailable = !isOccupied;
-            const canClick = isAvailable || isSelected;
-            const gender = genderMap.get(label);
-
-            // Sleeper: palette for icon color + fill (same as seater when selected)
-            const palette = (() => {
-              if (type !== "sleeper") return null;
-              if (isOccupied) {
-                if (gender === "F") return { icon: "text-pink-200", fill: 0.5 };
-                if (gender === "M") return { icon: "text-blue-200", fill: 0.5 };
-                return { icon: "text-gray-500", fill: 0.5 };
-              }
-              if (isSelected) return { icon: "text-green-800", fill: 0.5 };
-              return { icon: "text-green-700", fill: 0 };
-            })();
-
-            // Seater: fill + outline via seatVisual. Use same green as legend (Available=green-500, Selected=green-600).
-            const seatVisual = (() => {
-              if (type === "sleeper") return null;
-              if (isSelected) return { cls: "text-green-800", fill: 0.5 };
-              if (isOccupied) {
-                if (gender === "F") return { cls: "text-pink-200", fill: 0.5 };
-                if (gender === "M") return { cls: "text-blue-200", fill: 0.5 };
-                return { cls: "text-gray-500", fill: 0.5 };
-              }
-              return { cls: "text-green-700", fill: 0 };
-            })();
-
-            const isSleeper = type === "sleeper";
-
-            cells.push(
-              <button
-                key={label}
-                type="button"
-                disabled={!canClick}
-                onClick={() => canClick && onSelect(label)}
-                className={`
-                  relative flex flex-col items-center justify-center w-full min-w-0
-                  transition-colors text-xs font-medium
-                  ${isOccupied ? "text-gray-500 cursor-not-allowed" : "text-green-800"}
-                `}
-                style={{ minHeight: uniformRowPx }}
-              >
-                <div className={`flex items-center justify-center shrink-0 ${isSleeper ? palette!.icon : seatVisual!.cls}`}>
+          
+          // Seat cell
+          const label = cell.label;
+          const type = cell.type ?? "seater";
+          const isOccupied = occupiedSet.has(label);
+          const isSelected = selectedSet.has(label);
+          const isAvailable = !isOccupied;
+          const canClick = isAvailable || isSelected;
+          const gender = genderMap.get(label);
+          
+          // Color palette
+          const palette = (() => {
+            if (isOccupied) {
+              if (gender === "F") return { icon: "text-pink-200", fill: 0.5 };
+              if (gender === "M") return { icon: "text-blue-200", fill: 0.5 };
+              return { icon: "text-gray-500", fill: 0.5 };
+            }
+            if (isSelected) return { icon: "text-green-800", fill: 0.5 };
+            return { icon: "text-green-700", fill: 0 };
+          })();
+          
+          const isSleeper = type === "sleeper";
+          
+          return (
+            <button
+              key={label}
+              type="button"
+              disabled={!canClick}
+              onClick={() => canClick && onSelect(label)}
+              className={`
+                flex flex-col items-center justify-start
+                transition-colors text-xs font-medium
+                min-w-0 w-full h-full
+                ${isOccupied ? "text-gray-500 cursor-not-allowed" : "text-green-800"}
+              `}
+              style={{ 
+                gap: `${SPACING_CONFIG.ICON_TO_PRICE_GAP}px`,
+                padding: `${SPACING_CONFIG.SEAT_VERTICAL_PADDING}px ${SPACING_CONFIG.SEAT_HORIZONTAL_PADDING}px`,
+                margin: 0,
+                border: 'none',
+                background: 'transparent',
+              }}
+            >
+              {/* Seat icon */}
+              <div className="flex items-center justify-center shrink-0 leading-[0] [&>*]:block" style={{ display: 'block' }}>
+                <div className={palette.icon}>
                   {isSleeper ? (
-                    <SleeperIcon className="h-[4.5rem] w-[3rem]" strokeWidth={0.8} fillOpacity={palette!.fill ?? 0} />
+                    <SleeperIcon
+                      className="shrink-0 block"
+                      style={{ 
+                        width: seatIconWidth, 
+                        height: SPACING_CONFIG.SLEEPER_ICON_HEIGHT_PX,
+                        display: 'block',
+                      }}
+                      strokeWidth={0.5}
+                      fillOpacity={palette.fill ?? 0}
+                    />
                   ) : (
-                    <SeaterTopViewIcon className="h-12 w-12" fillOpacity={seatVisual!.fill} />
+                    <SeaterTopViewIcon
+                      className="shrink-0 block"
+                      style={{
+                        width: seatIconWidth,
+                        height: seatIconWidth,
+                        display: 'block',
+                      }}
+                      fillOpacity={palette.fill}
+                      strokeWidth={1}
+                    />
                   )}
                 </div>
-                {isOccupied && <span className="text-[10px] mt-0.5 text-gray-500">Sold</span>}
-                {isAvailable && <span className="text-[10px] mt-0.5">₹{fareInt}</span>}
-              </button>
-            );
-          }
-        }
-        return cells;
-      }).flat()}
+              </div>
+              
+              {/* Status/Price label */}
+              {isOccupied && (
+                <span className="text-[10px] leading-none block text-gray-500" style={{ margin: 0 }}>
+                  Sold
+                </span>
+              )}
+              {isAvailable && (
+                <span className="text-[10px] leading-none block" style={{ margin: 0 }}>
+                  ₹{fareInt}
+                </span>
+              )}
+            </button>
+          );
+        })
+      )}
     </div>
   );
 }
 
-export function SeatLayout({ layout, occupied, occupiedDetails, fare, selected, onSelect }: SeatLayoutProps) {
+/**
+ * Legend showing seat types and statuses
+ */
+function SeatTypesLegend() {
+  const symbolWidth = "min-w-[3.5rem] w-[3.5rem]";
+  
+  const row = (label: string, node: React.ReactNode) => (
+    <div key={label} className="flex items-center gap-3 py-1">
+      <span className={`flex items-center justify-center shrink-0 ${symbolWidth}`}>
+        {node}
+      </span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  );
+  
+  return (
+    <div className="w-full mb-4 p-3 rounded-lg bg-muted/30 border">
+      <p className="text-sm font-semibold text-foreground mb-2">
+        Seat symbols &amp; status
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
+        <div className="space-y-0">
+          {row(
+            "Seater (chair)",
+            <span className="text-green-700">
+              <SeaterTopViewIcon className="h-8 w-8 inline-block" fillOpacity={0} />
+            </span>
+          )}
+          {row(
+            "Sleeper (berth)",
+            <span className="text-green-700">
+              <SleeperIcon className="h-[4rem] w-[2.5rem] inline-block" strokeWidth={0.5} />
+            </span>
+          )}
+          {row(
+            "Available",
+            <span className="inline-block rounded border-2 border-green-500 bg-white min-w-[28px] min-h-[24px] shrink-0" />
+          )}
+          {row(
+            "Selected",
+            <span className="inline-block rounded border-2 border-green-600 bg-green-500 min-w-[28px] min-h-[24px] shrink-0" />
+          )}
+          {row(
+            "Sold",
+            <span className="inline-block rounded border-2 border-gray-300 bg-gray-100 min-w-[28px] min-h-[24px] shrink-0" />
+          )}
+        </div>
+        <div className="space-y-0">
+          {row(
+            "Booked (female)",
+            <span className="inline-block rounded border-2 border-pink-200 bg-pink-50 min-w-[28px] min-h-[24px] shrink-0" />
+          )}
+          {row(
+            "Booked (male)",
+            <span className="inline-block rounded border-2 border-blue-200 bg-blue-50 min-w-[28px] min-h-[24px] shrink-0" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Main SeatLayout Component
+ */
+export function SeatLayout({
+  layout,
+  occupied,
+  occupiedDetails,
+  fare,
+  selected,
+  onSelect,
+}: SeatLayoutProps) {
   const occupiedSet = useMemo(() => new Set(occupied), [occupied]);
+  
   const genderMap = useMemo(() => {
     const m = new Map<string, string>();
     occupiedDetails?.forEach((o) => {
@@ -640,27 +497,36 @@ export function SeatLayout({ layout, occupied, occupiedDetails, fare, selected, 
     });
     return m;
   }, [occupiedDetails]);
+  
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+  
   const { lower, upper } = useMemo(
     () => splitDecks(layout.rows, layout.cols, layout.labels, layout.types),
     [layout.rows, layout.cols, layout.labels, layout.types]
   );
-
+  
   const handleSelect = (seat: string) => onSelect(seat);
-
+  
   return (
-    <div className="flex flex-col items-center w-full max-w-2xl mx-auto">
-      {/* Know your seat types */}
+    <div className="flex flex-col items-center w-full max-w-4xl mx-auto">
+      {/* Legend */}
       <SeatTypesLegend />
-
-      {/* Lower and Upper deck side by side — same width and row alignment */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-fit max-w-full place-items-start">
-        <div className="border rounded-lg p-3 pt-2 pb-2 bg-muted/20 w-full min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-2 min-h-[3.25rem]">
+      
+      {/* Lower and Upper deck side by side */}
+      <div 
+        className="grid grid-cols-1 sm:grid-cols-2 w-fit max-w-full place-items-start"
+        style={{ gap: `${SPACING_CONFIG.DECK_GAP}px` }}
+      >
+        {/* Lower Deck */}
+        <div 
+          className="border rounded-lg bg-muted/20 w-full min-w-0"
+          style={{ padding: `${SPACING_CONFIG.DECK_PADDING}px` }}
+        >
+          <div className="flex items-start justify-between gap-2 mb-3">
             <p className="text-xs font-semibold text-muted-foreground">Lower deck</p>
-            <SteeringWheelIcon className="h-[3.25rem] w-[3.25rem] shrink-0 text-gray-400" />
+            <SteeringWheelIcon className="h-8 w-8 shrink-0 text-gray-400" />
           </div>
-          <div className="mt-2 w-fit">
+          <div className="w-fit">
             <DeckGrid
               rows={lower}
               occupiedSet={occupiedSet}
@@ -672,9 +538,16 @@ export function SeatLayout({ layout, occupied, occupiedDetails, fare, selected, 
             />
           </div>
         </div>
-        <div className="border rounded-lg p-3 pt-2 pb-2 bg-muted/20 w-full min-w-0">
-          <p className="text-xs font-semibold text-muted-foreground mb-2 min-h-[3.25rem] flex items-start">Upper deck</p>
-          <div className="mt-2 w-fit">
+        
+        {/* Upper Deck */}
+        <div 
+          className="border rounded-lg bg-muted/20 w-full min-w-0"
+          style={{ padding: `${SPACING_CONFIG.DECK_PADDING}px` }}
+        >
+          <p className="text-xs font-semibold text-muted-foreground mb-3">
+            Upper deck
+          </p>
+          <div className="w-fit">
             <DeckGrid
               rows={upper}
               occupiedSet={occupiedSet}
@@ -690,94 +563,3 @@ export function SeatLayout({ layout, occupied, occupiedDetails, fare, selected, 
     </div>
   );
 }
-
-/** Legend: symbols + availability states (no labels on individual seats). */
-function SeatTypesLegend() {
-  const symbolWidth = "min-w-[3.5rem] w-[3.5rem]";
-  const row = (label: string, node: React.ReactNode) => (
-    <div key={label} className="flex items-center gap-3 py-1">
-      <span className={`flex items-center justify-center shrink-0 ${symbolWidth}`}>{node}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
-    </div>
-  );
-  return (
-    <div className="w-full mb-4 p-3 rounded-lg bg-muted/30 border">
-      <p className="text-sm font-semibold text-foreground mb-2">Seat symbols &amp; status</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
-        <div className="space-y-0">
-          {row("Seater (chair)", <span className="text-green-700"><SeaterTopViewIcon className="h-8 w-8 inline-block" fillOpacity={0} /></span>)}
-          {row("Sleeper (berth)", <span className="text-green-700"><SleeperIcon className="h-[4rem] w-[2.5rem] inline-block" strokeWidth={0.8} /></span>)}
-          {row("Available", <span className="inline-block rounded border-2 border-green-500 bg-white min-w-[28px] min-h-[24px] shrink-0" />)}
-          {row("Selected", <span className="inline-block rounded border-2 border-green-600 bg-green-500 min-w-[28px] min-h-[24px] shrink-0" />)}
-          {row("Sold", <span className="inline-block rounded border-2 border-gray-300 bg-gray-100 min-w-[28px] min-h-[24px] shrink-0" />)}
-        </div>
-        <div className="space-y-0">
-          {row("Booked (female)", <span className="inline-block rounded border-2 border-pink-200 bg-pink-50 min-w-[28px] min-h-[24px] shrink-0" />)}
-          {row("Booked (male)", <span className="inline-block rounded border-2 border-blue-200 bg-blue-50 min-w-[28px] min-h-[24px] shrink-0" />)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Steering wheel icon: solid disc with 3 curved cut-outs + center hub hole */
-function SteeringWheelIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 32 32"
-      aria-hidden
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        {/* White = visible, Black = punched out */}
-        <mask id="steeringMask">
-          <rect width="32" height="32" fill="white" />
-
-          {/* Center hub hole */}
-          <circle cx="16" cy="18" r="2" fill="black" />
-
-          {/* Top window (curved cap cut-out) */}
-          <path
-            fill="black"
-            d="
-              M 8.0 13.0
-              Q 16.0 3.5 24.0 13.0
-              Q 21.2 15.2 16.0 13
-              Q 10.8 15.2 8.0 13.0
-              Z
-            "
-          />
-
-          {/* Bottom-left window */}
-          <path
-            fill="black"
-            d="
-              M 7.8 18.2
-              Q 8.6 24.8 14.2 24.6
-              Q 13.2 20.4 10.8 18.0
-              Q 9.2 16.4 7.8 18.2
-              Z
-            "
-          />
-
-          {/* Bottom-right window (mirror of bottom-left) */}
-          <path
-            fill="black"
-            d="
-              M 24.2 18.2
-              Q 23.4 24.8 17.8 24.6
-              Q 18.8 20.4 21.2 18.0
-              Q 22.8 16.4 24.2 18.2
-              Z
-            "
-          />
-        </mask>
-      </defs>
-
-      {/* Solid disc; mask punches the 3 windows + hub. Rim ~25% thinner than previous. */}
-      <circle cx="16" cy="16" r="11.7" fill="currentColor" mask="url(#steeringMask)" />
-    </svg>
-  );
-}
-

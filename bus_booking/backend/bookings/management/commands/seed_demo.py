@@ -9,6 +9,8 @@ from bookings.layout_presets import (
     LAYOUT_MIXED_SEATER_SLEEPER_1X2,
     LAYOUT_SEATER_2X2_AISLE,
     LAYOUT_SLEEPER_1X2_AISLE,
+    LAYOUT_SLEEPER_1X2_LARGE,
+    LAYOUT_SEMI_SLEEPER_2X2_AISLE,
 )
 from bookings.models import BoardingPoint, DroppingPoint, Schedule
 from buses.models import Bus, Operator
@@ -52,33 +54,41 @@ class Command(BaseCommand):
             demo_op_user.operator = op
             demo_op_user.save(update_fields=['operator'])
 
-        # Three bus types: seater 2x2, mixed (lower seater / upper sleeper), all sleeper
+        # Five bus types: full seater, mixed (seater + sleeper), full sleeper, large sleeper, semi-sleeper
         buses_data = [
             ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 40, 'Seater 2x2'),
             ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 30, 'Mixed (lower seater, upper sleeper)'),
             ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 30, 'Sleeper 1x2'),
+            ('KA04SL3456', LAYOUT_SLEEPER_1X2_LARGE, 36, 'Sleeper (large)'),
+            ('KA05SS7890', LAYOUT_SEMI_SLEEPER_2X2_AISLE, 40, 'Semi-sleeper 2x2'),
         ]
         buses = []
-        bus_seater = bus_mixed = bus_sleeper = None
+        bus_seater = bus_mixed = bus_sleeper = bus_sleeper_large = bus_semi = None
         for reg_no, seat_map, capacity, _ in buses_data:
             bus, _ = Bus.objects.update_or_create(
                 registration_no=reg_no,
                 defaults={'operator': op, 'capacity': capacity, 'seat_map_json': json.dumps(seat_map)}
             )
             buses.append(bus)
-        bus_seater, bus_mixed, bus_sleeper = buses[0], buses[1], buses[2]
+        bus_seater, bus_mixed, bus_sleeper, bus_sleeper_large, bus_semi = buses[0], buses[1], buses[2], buses[3], buses[4]
 
-        # Schedules for next 3 days: each day has one schedule per bus type so all three are bookable
-        # 7:00 = Seater, 10:00 = Mixed, 14:00 = Sleeper, 22:00 = Seater again
+        # Schedules for the next 30 days (1 month): mix of seater, mixed, sleeper, semi-sleeper
         now = timezone.now()
         created_count = 0
         schedule_times = [
+            (6, 30, bus_seater, '849.00'),   # Early seater
             (7, 0, bus_seater, '899.00'),    # Seater 2x2
+            (8, 0, bus_semi, '929.00'),      # Semi-sleeper
             (10, 0, bus_mixed, '950.00'),    # Mixed: lower seater, upper sleeper
+            (11, 30, bus_sleeper, '979.00'), # Sleeper
             (14, 0, bus_sleeper, '999.00'),  # Sleeper
+            (15, 0, bus_sleeper_large, '1049.00'),  # Large sleeper
+            (18, 0, bus_semi, '969.00'),     # Semi-sleeper evening
+            (20, 0, bus_mixed, '989.00'),    # Mixed night
             (22, 0, bus_seater, '999.00'),   # Seater night
+            (23, 0, bus_sleeper, '1099.00'), # Sleeper overnight
         ]
-        for day in range(0, 3):
+        for day in range(0, 30):
             base = (now + timedelta(days=day)).date()
             for dep_h, dep_m, bus, fare in schedule_times:
                 dep = timezone.make_aware(datetime.combine(base, time(dep_h, dep_m)))
@@ -110,9 +120,10 @@ class Command(BaseCommand):
                     DroppingPoint.objects.get_or_create(schedule=s, time=t, defaults={'location_name': loc, 'description': desc})
 
         self.stdout.write(self.style.SUCCESS(
-            f"Seeded: Route {route}, Operator {op.name}, 3 buses, {created_count} schedules"
+            f"Seeded: Route {route}, Operator {op.name}, 5 buses, {created_count} schedules (next 30 days)"
         ))
         self.stdout.write(self.style.SUCCESS(
-            "Buses: KA01AB1234 (Seater 2x2) | KA02ST5678 (Mixed: lower seater, upper sleeper) | KA03SL9012 (Sleeper)"
+            "Buses: KA01AB1234 (Seater) | KA02ST5678 (Mixed seater+sleeper) | KA03SL9012 (Sleeper) | "
+            "KA04SL3456 (Sleeper large) | KA05SS7890 (Semi-sleeper)"
         ))
         self.stdout.write(self.style.SUCCESS("Done."))

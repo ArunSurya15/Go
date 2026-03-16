@@ -41,7 +41,20 @@ def _sleeper_1x2_aisle(rows=10):
     return {"rows": rows, "cols": cols, "labels": labels, "types": types}
 
 
+def _semi_sleeper_2x2_aisle(rows=10):
+    """2x2 with aisle. All semi-sleeper (recliner style)."""
+    cols = 5
+    labels = []
+    types = []
+    for r in range(1, rows + 1):
+        labels.extend([f"{r}A", f"{r}B", "", f"{r}C", f"{r}D"])
+        types.extend(["semi_sleeper", "semi_sleeper", "aisle", "semi_sleeper", "semi_sleeper"])
+    return {"rows": rows, "cols": cols, "labels": labels, "types": types}
+
+
 # Public presets for use in seeds and API
-LAYOUT_SEATER_2X2_AISLE = _seater_2x2_aisle(10)      # 40 seats (2+2 per row)
-LAYOUT_MIXED_SEATER_SLEEPER_1X2 = _mixed_lower_seater_upper_sleeper_1x2(10)  # 30 seats (1+2 per row)
-LAYOUT_SLEEPER_1X2_AISLE = _sleeper_1x2_aisle(10)    # 30 seats (1+2 per row)
+LAYOUT_SEATER_2X2_AISLE = _seater_2x2_aisle(10)           # 40 seats (2+2 per row), full seater
+LAYOUT_MIXED_SEATER_SLEEPER_1X2 = _mixed_lower_seater_upper_sleeper_1x2(10)  # 30 seats, lower seater / upper sleeper
+LAYOUT_SLEEPER_1X2_AISLE = _sleeper_1x2_aisle(10)         # 30 seats (1+2 per row), full sleeper
+LAYOUT_SLEEPER_1X2_LARGE = _sleeper_1x2_aisle(12)         # 36 seats, full sleeper (12 rows)
+LAYOUT_SEMI_SLEEPER_2X2_AISLE = _semi_sleeper_2x2_aisle(10)  # 40 seats, full semi-sleeper
