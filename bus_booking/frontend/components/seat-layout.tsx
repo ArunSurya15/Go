@@ -21,8 +21,12 @@ type CellInfo = { label: string; type: CellType };
 const SPACING_CONFIG = {
   // Seat icon dimensions
   SEATER_ICON_PX: 32,
-  SLEEPER_ICON_HEIGHT_PX: 80,  // Increased from 108 to make it taller
+  SLEEPER_ICON_HEIGHT_PX: 60,  // Increased from 108 to make it taller
   SLEEPER_ICON_ASPECT: 12 / 22, // New viewBox ratio: width 12 / height 22 (includes 1px padding)
+  
+  // Icon stroke widths
+  SEATER_STROKE_WIDTH: 1,       // Stroke width for seater icon (set to 0 for no stroke)
+  SLEEPER_STROKE_WIDTH: 0.5,    // Stroke width for sleeper icon (set to 0 for no stroke)
   
   // Spacing around seats (padding inside each seat cell)
   SEAT_HORIZONTAL_PADDING: 2,   // Minimal left/right padding (set to 0 for no padding)
@@ -33,8 +37,8 @@ const SPACING_CONFIG = {
   
   // Grid gaps (spacing between grid cells)
   ROW_GAP: 8,                   // Vertical space between rows (set to 0 for no gap)
-  COLUMN_GAP: 1,                // Horizontal space between columns (set to 0 for no gap)
-  AISLE_WIDTH: 32,              // Width of aisle columns
+  COLUMN_GAP: 6,                // Horizontal space between columns (set to 0 for no gap)
+  AISLE_WIDTH: 16,              // Width of aisle columns
   
   // Steering wheel row
   STEERING_ROW_HEIGHT: 48,
@@ -51,7 +55,7 @@ export const SeaterTopViewIcon = ({
   className,
   fillOpacity = 0,
   strokeOpacity = 1,
-  strokeWidth = 1,
+  strokeWidth = 0.5,
 }: {
   className?: string;
   fillOpacity?: number;
@@ -125,7 +129,7 @@ export const SeaterTopViewIcon = ({
 const SleeperIcon = ({
   className,
   style,
-  strokeWidth = 0.5,
+  strokeWidth = 0.1,
   fillOpacity = 0,
 }: {
   className?: string;
@@ -137,24 +141,31 @@ const SleeperIcon = ({
     className={className}
     style={style}
     viewBox="0 0 12 22"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={strokeWidth}
-    strokeLinecap="round"
-    strokeLinejoin="round"
+    xmlns="http://www.w3.org/2000/svg"
   >
     {fillOpacity > 0 && (
       <g fill="currentColor" opacity={fillOpacity}>
         <rect x="1" y="1" width="10" height="20" rx="2" />
       </g>
     )}
-    <rect x="1" y="1" width="10" height="20" rx="2" />
+    <rect 
+      x="1" 
+      y="1" 
+      width="10" 
+      height="20" 
+      rx="2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
     <rect
       x="2.2"
       y="15.5"
       width="7.6"
       height="2.8"
-      rx="1"
+      rx="1.4"
       fill="currentColor"
       opacity="0.18"
       stroke="none"
@@ -376,7 +387,7 @@ function DeckGrid({
                         height: SPACING_CONFIG.SLEEPER_ICON_HEIGHT_PX,
                         display: 'block',
                       }}
-                      strokeWidth={0.5}
+                      strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
                       fillOpacity={palette.fill ?? 0}
                     />
                   ) : (
@@ -388,7 +399,7 @@ function DeckGrid({
                         display: 'block',
                       }}
                       fillOpacity={palette.fill}
-                      strokeWidth={1}
+                      strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
                     />
                   )}
                 </div>
@@ -438,13 +449,13 @@ function SeatTypesLegend() {
           {row(
             "Seater (chair)",
             <span className="text-green-700">
-              <SeaterTopViewIcon className="h-8 w-8 inline-block" fillOpacity={0} />
+              <SeaterTopViewIcon className="h-8 w-8 inline-block" fillOpacity={0} strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH} />
             </span>
           )}
           {row(
             "Sleeper (berth)",
             <span className="text-green-700">
-              <SleeperIcon className="h-[4rem] w-[2.5rem] inline-block" strokeWidth={0.5} />
+              <SleeperIcon className="h-[4rem] w-[2.5rem] inline-block" strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH} />
             </span>
           )}
           {row(
