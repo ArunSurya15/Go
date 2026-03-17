@@ -20,13 +20,13 @@ type CellInfo = { label: string; type: CellType };
 
 const SPACING_CONFIG = {
   // Seat icon dimensions
-  SEATER_ICON_PX: 32,
+  SEATER_ICON_PX: 36,
   SLEEPER_ICON_HEIGHT_PX: 60,  // Increased from 108 to make it taller
   SLEEPER_ICON_ASPECT: 12 / 22, // New viewBox ratio: width 12 / height 22 (includes 1px padding)
   
-  // Icon stroke widths
-  SEATER_STROKE_WIDTH: 1,       // Stroke width for seater icon (set to 0 for no stroke)
-  SLEEPER_STROKE_WIDTH: 0.5,    // Stroke width for sleeper icon (set to 0 for no stroke)
+  // Icon stroke widths (slightly thicker so outlines are visible at small sizes)
+  SEATER_STROKE_WIDTH: 1,    // Stroke width for seater icon (set to 0 for no stroke)
+  SLEEPER_STROKE_WIDTH: 0.5,   // Stroke width for sleeper icon (set to 0 for no stroke)
   
   // Spacing around seats (padding inside each seat cell)
   SEAT_HORIZONTAL_PADDING: 2,   // Minimal left/right padding (set to 0 for no padding)
@@ -40,8 +40,8 @@ const SPACING_CONFIG = {
   COLUMN_GAP: 6,                // Horizontal space between columns (set to 0 for no gap)
   AISLE_WIDTH: 16,              // Width of aisle columns
   
-  // Steering wheel row
-  STEERING_ROW_HEIGHT: 48,
+  // Top spacer row height (0 = no spacer; seat rows align via equal header height only)
+  STEERING_ROW_HEIGHT: 0,
   
   // Deck container spacing
   DECK_PADDING: 12,
@@ -53,11 +53,13 @@ const SPACING_CONFIG = {
  */
 export const SeaterTopViewIcon = ({
   className,
+  style,
   fillOpacity = 0,
   strokeOpacity = 1,
   strokeWidth = 0.5,
 }: {
   className?: string;
+  style?: React.CSSProperties;
   fillOpacity?: number;
   strokeOpacity?: number;
   strokeWidth?: number;
@@ -98,6 +100,7 @@ export const SeaterTopViewIcon = ({
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 22 24"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
@@ -263,7 +266,7 @@ function DeckGrid({
   fare,
   selectedSet,
   onSelect,
-  steeringInTopRight,
+  topSpacerRow,
   deckType = "lower",
 }: {
   rows: CellInfo[][];
@@ -272,13 +275,17 @@ function DeckGrid({
   fare: string;
   selectedSet: Set<string>;
   onSelect: (seat: string) => void;
-  steeringInTopRight?: boolean;
+  /** When true, add an empty first row so seat rows align between lower and upper deck */
+  topSpacerRow?: boolean;
   deckType?: "lower" | "upper";
 }) {
   const cols = rows[0]?.length ?? 0;
   const numRows = rows.length;
   
   if (cols === 0 || numRows === 0) return null;
+  
+  const spacerHeight = SPACING_CONFIG.STEERING_ROW_HEIGHT;
+  const hasTopRow = !!topSpacerRow && spacerHeight > 0;
   
   const fareInt = Math.round(Number(fare)) || 0;
   const isSleeperDeck = rows.every((row) => 
@@ -298,28 +305,17 @@ function DeckGrid({
       className="inline-grid items-start"
       style={{
         gridTemplateColumns: `repeat(${cols}, min-content)`,
-        gridTemplateRows: steeringInTopRight 
-          ? `${SPACING_CONFIG.STEERING_ROW_HEIGHT}px repeat(${numRows}, min-content)`
+        gridTemplateRows: hasTopRow
+          ? `${spacerHeight}px repeat(${numRows}, min-content)`
           : `repeat(${numRows}, min-content)`,
         columnGap: `${SPACING_CONFIG.COLUMN_GAP}px`,
         rowGap: `${SPACING_CONFIG.ROW_GAP}px`,
       }}
     >
-      {/* Render grid row by row, column by column */}
-      {steeringInTopRight && Array.from({ length: cols }, (_, c) => {
-        if (c === cols - 1) {
-          return (
-            <div
-              key="steering"
-              className="flex items-center justify-center text-gray-400"
-              title="Bus direction (front)"
-            >
-              <SteeringWheelIcon className="h-7 w-7" />
-            </div>
-          );
-        }
-        return <div key={`empty-${c}`} />;
-      })}
+      {/* First row: empty spacer so lower/upper deck seat rows align */}
+      {hasTopRow && Array.from({ length: cols }, (_, c) => (
+        <div key={`top-spacer-${c}`} aria-hidden />
+      ))}
       
       {rows.map((row, r) =>
         row.map((cell, c) => {
@@ -365,10 +361,11 @@ function DeckGrid({
               className={`
                 flex flex-col items-center justify-start
                 transition-colors text-xs font-medium
-                min-w-0 w-full h-full
+                w-full h-full
                 ${isOccupied ? "text-gray-500 cursor-not-allowed" : "text-green-800"}
               `}
               style={{ 
+                minWidth: seatIconWidth + SPACING_CONFIG.SEAT_HORIZONTAL_PADDING * 2,
                 gap: `${SPACING_CONFIG.ICON_TO_PRICE_GAP}px`,
                 padding: `${SPACING_CONFIG.SEAT_VERTICAL_PADDING}px ${SPACING_CONFIG.SEAT_HORIZONTAL_PADDING}px`,
                 margin: 0,
@@ -533,9 +530,11 @@ export function SeatLayout({
           className="border rounded-lg bg-muted/20 w-full min-w-0"
           style={{ padding: `${SPACING_CONFIG.DECK_PADDING}px` }}
         >
-          <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center justify-between gap-2 mb-8 min-h-10">
             <p className="text-xs font-semibold text-muted-foreground">Lower deck</p>
-            <SteeringWheelIcon className="h-8 w-8 shrink-0 text-gray-400" />
+            <span title="Bus direction (front)">
+              <SteeringWheelIcon className="h-12 w-12 shrink-0 text-gray-400" />
+            </span>
           </div>
           <div className="w-fit">
             <DeckGrid
@@ -545,6 +544,7 @@ export function SeatLayout({
               fare={fare}
               selectedSet={selectedSet}
               onSelect={handleSelect}
+              topSpacerRow
               deckType="lower"
             />
           </div>
@@ -555,9 +555,9 @@ export function SeatLayout({
           className="border rounded-lg bg-muted/20 w-full min-w-0"
           style={{ padding: `${SPACING_CONFIG.DECK_PADDING}px` }}
         >
-          <p className="text-xs font-semibold text-muted-foreground mb-3">
-            Upper deck
-          </p>
+          <div className="flex items-center justify-between gap-2 mb-10 min-h-10">
+            <p className="text-xs font-semibold text-muted-foreground">Upper deck</p>
+          </div>
           <div className="w-fit">
             <DeckGrid
               rows={upper}
@@ -566,6 +566,7 @@ export function SeatLayout({
               fare={fare}
               selectedSet={selectedSet}
               onSelect={handleSelect}
+              topSpacerRow
               deckType="upper"
             />
           </div>
