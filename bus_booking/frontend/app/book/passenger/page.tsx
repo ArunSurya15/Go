@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -10,6 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { booking, routes, type SeatMapResponse, type Schedule } from "@/lib/api";
+import { computeFemaleOnlySeatLabels } from "@/components/seat-layout";
+
+function isMalePassengerGender(g: string): boolean {
+  const u = g.trim().toUpperCase();
+  return u === "M" || u === "MALE";
+}
 
 const FLOW_KEY = "bus_booking_flow";
 const INDIAN_STATES = [
@@ -90,6 +96,16 @@ export default function PassengerPage() {
     }
   }, [token, scheduleId]);
 
+  const femaleOnlySeats = useMemo(() => {
+    if (!seatMap) return new Set<string>();
+    const occ = new Set(seatMap.occupied);
+    const gm = new Map<string, string>();
+    seatMap.occupied_details?.forEach((o) => {
+      if (o.label) gm.set(o.label, (o.gender || "").toString().toUpperCase());
+    });
+    return computeFemaleOnlySeatLabels(seatMap.layout, occ, gm);
+  }, [seatMap]);
+
   // Load last booking's contact info
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +141,20 @@ export default function PassengerPage() {
     });
     if (missing) {
       setError("Please fill all passenger details.");
+      return;
+    }
+    const maleOnFemaleOnly = seats.find((s) => {
+      const p = passengers[s];
+      return (
+        femaleOnlySeats.has(s) &&
+        p?.gender &&
+        isMalePassengerGender(p.gender)
+      );
+    });
+    if (maleOnFemaleOnly) {
+      setError(
+        `Seat ${maleOnFemaleOnly} is only available for female passengers (next to a booked female). Change seat on the seat selection step or set gender to Female.`
+      );
       return;
     }
     setError("");
@@ -254,6 +284,11 @@ export default function PassengerPage() {
                         <div>
                           <p className="font-medium">Passenger {idx + 1}</p>
                           <p className="text-xs text-muted-foreground">Seat {seat}, {deck}</p>
+                          {femaleOnlySeats.has(seat) && (
+                            <p className="text-xs text-pink-700 mt-1">
+                              Female passengers only — next to a booked female.
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -298,12 +333,35 @@ export default function PassengerPage() {
                               name={`gender-${seat}`}
                               value="Male"
                               checked={p.gender === "Male"}
-                              onChange={(e) =>
-                                setPassengers((prev) => ({
-                                  ...prev,
-                                  [seat]: { ...prev[seat], gender: e.target.value },
-                                }))
-                              }
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setPassengers((prev) => {
+                                  const merged = {
+                                    ...prev,
+                                    [seat]: { ...prev[seat], gender: next },
+                                  };
+                                  const bad = seats.find((s) => {
+                                    const g = merged[s]?.gender;
+                                    return (
+                                      femaleOnlySeats.has(s) &&
+                                      !!g &&
+                                      isMalePassengerGender(g)
+                                    );
+                                  });
+                                  if (bad) {
+                                    setError(
+                                      `Seat ${bad} is only available for female passengers (next to a booked female). Select Female or change your seat before payment.`
+                                    );
+                                  } else {
+                                    setError((prevErr) =>
+                                      prevErr.includes("only available for female")
+                                        ? ""
+                                        : prevErr
+                                    );
+                                  }
+                                  return merged;
+                                });
+                              }}
                             />
                             <span className="text-sm">Male</span>
                           </label>
@@ -313,12 +371,35 @@ export default function PassengerPage() {
                               name={`gender-${seat}`}
                               value="Female"
                               checked={p.gender === "Female"}
-                              onChange={(e) =>
-                                setPassengers((prev) => ({
-                                  ...prev,
-                                  [seat]: { ...prev[seat], gender: e.target.value },
-                                }))
-                              }
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setPassengers((prev) => {
+                                  const merged = {
+                                    ...prev,
+                                    [seat]: { ...prev[seat], gender: next },
+                                  };
+                                  const bad = seats.find((s) => {
+                                    const g = merged[s]?.gender;
+                                    return (
+                                      femaleOnlySeats.has(s) &&
+                                      !!g &&
+                                      isMalePassengerGender(g)
+                                    );
+                                  });
+                                  if (bad) {
+                                    setError(
+                                      `Seat ${bad} is only available for female passengers (next to a booked female). Select Female or change your seat before payment.`
+                                    );
+                                  } else {
+                                    setError((prevErr) =>
+                                      prevErr.includes("only available for female")
+                                        ? ""
+                                        : prevErr
+                                    );
+                                  }
+                                  return merged;
+                                });
+                              }}
                             />
                             <span className="text-sm">Female</span>
                           </label>

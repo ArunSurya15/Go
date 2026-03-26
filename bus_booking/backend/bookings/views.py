@@ -19,6 +19,11 @@ from .models import Schedule, Booking, Payment
 from django.utils import timezone
 
 from .lock import try_hold_seats, release_seats
+from .seat_rules import (
+    get_occupied_and_seat_genders,
+    layout_labels_and_cols_from_bus,
+    male_reserved_seat_adjacent_to_female,
+)
 
 class ScheduleListView(generics.ListAPIView):
     serializer_class = ScheduleSerializer
@@ -95,31 +100,7 @@ class ScheduleSeatMapView(generics.GenericAPIView):
         while len(types) < total:
             types.append("seater")
         types = types[:total]
-        occupied = set()
-        seat_gender = {}  # seat_no -> "M" | "F" from first booking that has it
-        for r in Reservation.objects.filter(schedule=schedule, status='PENDING', expires_at__gt=timezone.now()).values_list('seat_no', flat=True):
-            occupied.add(r)
-        for b in Booking.objects.filter(schedule=schedule, status__in=['PENDING', 'CONFIRMED']).only('seats', 'passenger_details'):
-            try:
-                for s in json.loads(b.seats or '[]'):
-                    occupied.add(s)
-                    if s not in seat_gender:
-                        try:
-                            details = json.loads(b.passenger_details or '{}')
-                            if isinstance(details, dict) and s in details:
-                                g = details[s].get('gender') if isinstance(details[s], dict) else None
-                                if g:
-                                    g = str(g).strip().upper()
-                                    if g in ('M', 'F'):
-                                        seat_gender[s] = g
-                                    elif g == 'MALE':
-                                        seat_gender[s] = 'M'
-                                    elif g == 'FEMALE':
-                                        seat_gender[s] = 'F'
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+        occupied, seat_gender = get_occupied_and_seat_genders(schedule)
         occupied_details = [{'label': s, 'gender': seat_gender.get(s)} for s in sorted(occupied)]
         return Response({
             'layout': {'rows': rows, 'cols': cols, 'labels': labels, 'types': types},
@@ -282,6 +263,20 @@ class CreatePaymentView(generics.GenericAPIView):
         passengers = request.data.get('passengers')  # { "1A": { "name", "age", "gender" }, ... }
         if isinstance(passengers, dict):
             booking_kw['passenger_details'] = json.dumps(passengers)
+
+        labels, cols = layout_labels_and_cols_from_bus(schedule.bus)
+        _, seat_gender = get_occupied_and_seat_genders(schedule)
+        if isinstance(passengers, dict):
+            for seat in seats:
+                p = passengers.get(seat) or {}
+                g = str(p.get('gender', '')).strip().upper()
+                if g not in ('M', 'MALE'):
+                    continue
+                err = male_reserved_seat_adjacent_to_female(
+                    labels, cols, [seat], seat_gender, seats
+                )
+                if err:
+                    return Response({'detail': err}, status=400)
 
         use_demo = getattr(settings, 'DEMO_PAYMENTS', False) or not (settings.RAZORPAY_KEY_ID and settings.RAZORPAY_KEY_SECRET)
         if use_demo:

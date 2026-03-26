@@ -6,13 +6,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { SeatLayout } from "@/components/seat-layout";
 import { booking, routes, type SeatMapResponse } from "@/lib/api";
 

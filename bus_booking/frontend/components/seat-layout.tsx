@@ -9,9 +9,44 @@ type SeatLayoutProps = {
   fare: string;
   selected: string[];
   onSelect: (seat: string) => void;
+  /** Called when user selects (clicks to add) an available female-only seat */
+  onFemaleOnlySeatClick?: (seat: string) => void;
 };
 
+/**
+ * Available seats horizontally adjacent to an occupied female must be booked by females only.
+ */
+export function computeFemaleOnlySeatLabels(
+  layout: { rows: number; cols: number; labels: string[] },
+  occupied: Set<string>,
+  genderMap: Map<string, string>
+): Set<string> {
+  const { rows, cols, labels } = layout;
+  const out = new Set<string>();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      const label = labels[idx] ?? "";
+      if (!label || !String(label).trim()) continue;
+      if (occupied.has(label)) continue;
+      for (const dc of [-1, 1] as const) {
+        const nc = c + dc;
+        if (nc < 0 || nc >= cols) continue;
+        const nlabel = labels[r * cols + nc] ?? "";
+        if (!nlabel || !String(nlabel).trim()) continue;
+        if (occupied.has(nlabel) && genderMap.get(nlabel) === "F") {
+          out.add(label);
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 type CellType = "seater" | "sleeper" | "semi_sleeper" | "aisle" | "";
+/** Alias for operator UI and templates */
+export type SeatCellType = CellType;
 type CellInfo = { label: string; type: CellType };
 
 // ============================================================================
@@ -266,6 +301,8 @@ function DeckGrid({
   fare,
   selectedSet,
   onSelect,
+  femaleOnlySet,
+  onFemaleOnlySeatClick,
   topSpacerRow,
   deckType = "lower",
 }: {
@@ -275,6 +312,8 @@ function DeckGrid({
   fare: string;
   selectedSet: Set<string>;
   onSelect: (seat: string) => void;
+  femaleOnlySet: Set<string>;
+  onFemaleOnlySeatClick?: (seat: string) => void;
   /** When true, add an empty first row so seat rows align between lower and upper deck */
   topSpacerRow?: boolean;
   deckType?: "lower" | "upper";
@@ -337,32 +376,43 @@ function DeckGrid({
           const isSelected = selectedSet.has(label);
           const isAvailable = !isOccupied;
           const canClick = isAvailable || isSelected;
+          const isFemaleOnly = isAvailable && femaleOnlySet.has(label);
+          const femaleOnlyHighlight = isFemaleOnly && !isSelected;
           const gender = genderMap.get(label);
+          /** Booked female = pink; booked male or unknown gender (legacy / no passenger JSON) = blue */
+          const occupiedFemale = isOccupied && gender === "F";
+          const occupiedMaleOrUnknown = isOccupied && !occupiedFemale;
           
           // Color palette
           const palette = (() => {
             if (isOccupied) {
-              if (gender === "F") return { icon: "text-pink-200", fill: 0.5 };
-              if (gender === "M") return { icon: "text-blue-200", fill: 0.5 };
-              return { icon: "text-gray-500", fill: 0.5 };
+              if (occupiedFemale) return { icon: "text-pink-200", fill: 0.5 };
+              return { icon: "text-blue-200", fill: 0.5 };
             }
             if (isSelected) return { icon: "text-green-800", fill: 0.5 };
+            if (femaleOnlyHighlight) return { icon: "text-pink-600", fill: 0 };
             return { icon: "text-green-700", fill: 0 };
           })();
           
           const isSleeper = type === "sleeper";
-          
-          return (
+
+          const seatButton = (
             <button
-              key={label}
               type="button"
               disabled={!canClick}
-              onClick={() => canClick && onSelect(label)}
+              onClick={() => {
+                if (!canClick) return;
+                if (isFemaleOnly && !isSelected) {
+                  onFemaleOnlySeatClick?.(label);
+                }
+                onSelect(label);
+              }}
+              title={isFemaleOnly ? "Female only" : undefined}
               className={`
                 flex flex-col items-center justify-start
                 transition-colors text-xs font-medium
                 w-full h-full
-                ${isOccupied ? "text-gray-500 cursor-not-allowed" : "text-green-800"}
+                ${isOccupied ? (occupiedFemale ? "text-pink-300 cursor-not-allowed" : "text-blue-300 cursor-not-allowed") : "text-green-800"}
               `}
               style={{ 
                 minWidth: seatIconWidth + SPACING_CONFIG.SEAT_HORIZONTAL_PADDING * 2,
@@ -404,78 +454,153 @@ function DeckGrid({
               
               {/* Status/Price label */}
               {isOccupied && (
-                <span className="text-[10px] leading-none block text-gray-500" style={{ margin: 0 }}>
+                <span
+                  className={`text-[10px] leading-none block ${occupiedFemale ? "text-pink-400" : "text-blue-400"}`}
+                  style={{ margin: 0 }}
+                >
                   Sold
                 </span>
               )}
               {isAvailable && (
-                <span className="text-[10px] leading-none block" style={{ margin: 0 }}>
+                <span
+                  className={`text-[10px] leading-none block ${femaleOnlyHighlight ? "text-pink-700" : ""}`}
+                  style={{ margin: 0 }}
+                >
                   ₹{fareInt}
                 </span>
               )}
             </button>
           );
+
+          if (isFemaleOnly) {
+            return (
+              <div
+                key={label}
+                className="relative flex flex-col items-center justify-start group"
+              >
+                {/* Dark popover (hover / keyboard focus) */}
+                <div
+                  className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-max min-w-[5.5rem] -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+                  role="tooltip"
+                >
+                  <div className="rounded-lg bg-zinc-900 px-3 py-2 text-center text-white shadow-lg dark:bg-zinc-950">
+                    <p className="text-sm font-semibold leading-tight tabular-nums">₹{fareInt}</p>
+                    <p className="text-[11px] font-medium text-white/95 mt-0.5">Female only</p>
+                  </div>
+                  <div className="flex justify-center">
+                    <div
+                      className="h-0 w-0 border-x-[7px] border-x-transparent border-t-[7px] border-t-zinc-900 dark:border-t-zinc-950"
+                      aria-hidden
+                    />
+                  </div>
+                </div>
+                {seatButton}
+              </div>
+            );
+          }
+
+          return <React.Fragment key={label}>{seatButton}</React.Fragment>;
         })
       )}
     </div>
   );
 }
 
+/** Legend icon sizes — shared for type row + Available/Selected pairs */
+const LEGEND_SEATER = "h-10 w-10 sm:h-11 sm:w-11";
+const LEGEND_SLEEPER = "h-[3.35rem] w-[2.1rem] sm:h-[3.65rem] sm:w-[2.25rem]";
+
 /**
  * Legend showing seat types and statuses
  */
 function SeatTypesLegend() {
-  const symbolWidth = "min-w-[3.5rem] w-[3.5rem]";
-  
-  const row = (label: string, node: React.ReactNode) => (
-    <div key={label} className="flex items-center gap-3 py-1">
-      <span className={`flex items-center justify-center shrink-0 ${symbolWidth}`}>
+  const symbolPair = (
+    <span className="flex items-end justify-center gap-3 text-inherit">
+      <SeaterTopViewIcon
+        className={`${LEGEND_SEATER} shrink-0 inline-block`}
+        fillOpacity={0}
+        strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
+      />
+      <SleeperIcon
+        className={`${LEGEND_SLEEPER} shrink-0 block`}
+        strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
+        fillOpacity={0}
+      />
+    </span>
+  );
+
+  const symbolPairSelected = (
+    <span className="flex items-end justify-center gap-3 text-green-800">
+      <SeaterTopViewIcon
+        className={`${LEGEND_SEATER} shrink-0 inline-block`}
+        fillOpacity={0.5}
+        strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
+      />
+      <SleeperIcon
+        className={`${LEGEND_SLEEPER} shrink-0 block`}
+        strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
+        fillOpacity={0.5}
+      />
+    </span>
+  );
+
+  const row = (rowKey: string, label: React.ReactNode, node: React.ReactNode) => (
+    <div key={rowKey} className="flex items-center gap-3 sm:gap-4 py-1.5 min-h-[3.25rem]">
+      <span className="flex items-end justify-center shrink-0 min-w-[7.5rem] w-[7.5rem] sm:min-w-[8.25rem] sm:w-[8.25rem]">
         {node}
       </span>
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground leading-snug self-center">{label}</span>
     </div>
   );
-  
+
   return (
     <div className="w-full mb-4 p-3 rounded-lg bg-muted/30 border">
-      <p className="text-sm font-semibold text-foreground mb-2">
+      <p className="text-sm font-semibold text-foreground mb-3">
         Seat symbols &amp; status
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
-        <div className="space-y-0">
-          {row(
-            "Seater (chair)",
-            <span className="text-green-700">
-              <SeaterTopViewIcon className="h-8 w-8 inline-block" fillOpacity={0} strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH} />
-            </span>
-          )}
-          {row(
-            "Sleeper (berth)",
-            <span className="text-green-700">
-              <SleeperIcon className="h-[4rem] w-[2.5rem] inline-block" strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH} />
-            </span>
-          )}
-          {row(
-            "Available",
-            <span className="inline-block rounded border-2 border-green-500 bg-white min-w-[28px] min-h-[24px] shrink-0" />
-          )}
-          {row(
-            "Selected",
-            <span className="inline-block rounded border-2 border-green-600 bg-green-500 min-w-[28px] min-h-[24px] shrink-0" />
-          )}
-          {row(
-            "Sold",
-            <span className="inline-block rounded border-2 border-gray-300 bg-gray-100 min-w-[28px] min-h-[24px] shrink-0" />
-          )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
+        <div className="flex flex-col">
+          {/* Seater + Sleeper on one row, aligned */}
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-2 pb-3 mb-1 border-b border-border/60">
+            <div className="flex items-end gap-2.5 min-w-0">
+              <span className="text-green-700 flex shrink-0 items-end justify-center w-[2.75rem] sm:w-[3rem]">
+                <SeaterTopViewIcon
+                  className={`${LEGEND_SEATER} inline-block`}
+                  fillOpacity={0}
+                  strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
+                />
+              </span>
+              <span className="text-xs text-muted-foreground pb-0.5 leading-snug">
+                Seater (chair)
+              </span>
+            </div>
+            <div className="flex items-end gap-2.5 min-w-0">
+              <span className="text-green-700 flex shrink-0 items-end justify-center w-[2.25rem] sm:w-[2.35rem]">
+                <SleeperIcon
+                  className={`${LEGEND_SLEEPER} inline-block`}
+                  strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
+                  fillOpacity={0}
+                />
+              </span>
+              <span className="text-xs text-muted-foreground pb-0.5 leading-snug">
+                Sleeper (berth)
+              </span>
+            </div>
+          </div>
+
+          {row("legend-available", "Available", <span className="text-green-700">{symbolPair}</span>)}
+          {row("legend-selected", "Selected", symbolPairSelected)}
         </div>
-        <div className="space-y-0">
+        <div className="flex flex-col sm:pt-0 pt-2">
           {row(
+            "legend-booked-f",
             "Booked (female)",
-            <span className="inline-block rounded border-2 border-pink-200 bg-pink-50 min-w-[28px] min-h-[24px] shrink-0" />
+            <span className="inline-block rounded border-2 border-pink-200 bg-pink-50 min-w-[32px] min-h-[28px] shrink-0" />
           )}
           {row(
+            "legend-booked-m",
             "Booked (male)",
-            <span className="inline-block rounded border-2 border-blue-200 bg-blue-50 min-w-[28px] min-h-[24px] shrink-0" />
+            <span className="inline-block rounded border-2 border-blue-200 bg-blue-50 min-w-[32px] min-h-[28px] shrink-0" />
           )}
         </div>
       </div>
@@ -493,6 +618,7 @@ export function SeatLayout({
   fare,
   selected,
   onSelect,
+  onFemaleOnlySeatClick,
 }: SeatLayoutProps) {
   const occupiedSet = useMemo(() => new Set(occupied), [occupied]);
   
@@ -507,13 +633,16 @@ export function SeatLayout({
   }, [occupiedDetails]);
   
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const femaleOnlySet = useMemo(
+    () => computeFemaleOnlySeatLabels(layout, occupiedSet, genderMap),
+    [layout, occupiedSet, genderMap]
+  );
   
   const { lower, upper } = useMemo(
     () => splitDecks(layout.rows, layout.cols, layout.labels, layout.types),
     [layout.rows, layout.cols, layout.labels, layout.types]
   );
-  
-  const handleSelect = (seat: string) => onSelect(seat);
   
   return (
     <div className="flex flex-col items-center w-full max-w-4xl mx-auto">
@@ -543,7 +672,9 @@ export function SeatLayout({
               genderMap={genderMap}
               fare={fare}
               selectedSet={selectedSet}
-              onSelect={handleSelect}
+              onSelect={onSelect}
+              femaleOnlySet={femaleOnlySet}
+              onFemaleOnlySeatClick={onFemaleOnlySeatClick}
               topSpacerRow
               deckType="lower"
             />
@@ -565,7 +696,9 @@ export function SeatLayout({
               genderMap={genderMap}
               fare={fare}
               selectedSet={selectedSet}
-              onSelect={handleSelect}
+              onSelect={onSelect}
+              femaleOnlySet={femaleOnlySet}
+              onFemaleOnlySeatClick={onFemaleOnlySeatClick}
               topSpacerRow
               deckType="upper"
             />
