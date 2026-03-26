@@ -62,8 +62,8 @@ export default function MyBookingsPage() {
       </div>
 
       {error && (
-        <Card className="mb-4 border-red-200 bg-red-50">
-          <CardContent className="py-4 text-red-700">{error}</CardContent>
+        <Card className="mb-4 border-amber-200 bg-amber-50">
+          <CardContent className="py-4 text-amber-900">{error}</CardContent>
         </Card>
       )}
 

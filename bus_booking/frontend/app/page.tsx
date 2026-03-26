@@ -150,7 +150,7 @@ export default function HomePage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg"
+                  className="w-full h-12 font-semibold rounded-lg"
                   disabled={loading}
                 >
                   {loading ? "Searching…" : "Search buses"}

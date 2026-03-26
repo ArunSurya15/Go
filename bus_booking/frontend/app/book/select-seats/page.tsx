@@ -168,7 +168,6 @@ export default function SelectSeatsPage() {
                 </div>
               )}
               <Button
-                className="bg-red-600 hover:bg-red-700"
                 onClick={handleContinue}
                 disabled={loading || seats.length === 0}
               >

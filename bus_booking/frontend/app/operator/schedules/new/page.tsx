@@ -137,7 +137,7 @@ export default function AddSchedulePage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 border border-amber-200">{error}</p>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">

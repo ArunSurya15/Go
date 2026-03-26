@@ -3,6 +3,7 @@ from rest_framework import serializers
 from buses.models import Bus, Operator
 from common.models import Route
 from bookings.models import Schedule, BoardingPoint, DroppingPoint
+from buses.constants import VALID_FEATURE_IDS
 
 
 class OperatorProfileSerializer(serializers.ModelSerializer):
@@ -71,14 +72,65 @@ class SeatMapField(serializers.Field):
 
 
 class OperatorBusSerializer(serializers.ModelSerializer):
-    """Bus create/update for operator (includes seat_map)."""
+    """Bus create/update for operator (includes seat_map, amenities checklist, extras)."""
 
     seat_map = SeatMapField(source="seat_map_json", required=False)
+    features = serializers.ListField(
+        child=serializers.CharField(max_length=64),
+        required=False,
+        default=list,
+    )
+    extras_note = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
 
     class Meta:
         model = Bus
-        fields = ("id", "registration_no", "capacity", "seat_map", "operator")
+        fields = (
+            "id",
+            "registration_no",
+            "capacity",
+            "seat_map",
+            "features",
+            "extras_note",
+            "operator",
+        )
         read_only_fields = ("operator",)
+
+    def validate_features(self, value):
+        for fid in value:
+            if fid not in VALID_FEATURE_IDS:
+                raise serializers.ValidationError(f"Unknown feature id: {fid}")
+        return value
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            data["features"] = json.loads(instance.features_json or "[]")
+        except Exception:
+            data["features"] = []
+        data["extras_note"] = instance.extras_note or ""
+        return data
+
+    def create(self, validated_data):
+        features = validated_data.pop("features", [])
+        extras_note = validated_data.pop("extras_note", "")
+        validated_data["features_json"] = json.dumps(features)
+        validated_data["extras_note"] = extras_note
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        features = validated_data.pop("features", None)
+        extras_note = validated_data.pop("extras_note", None)
+        instance = super().update(instance, validated_data)
+        update_fields = []
+        if features is not None:
+            instance.features_json = json.dumps(features)
+            update_fields.append("features_json")
+        if extras_note is not None:
+            instance.extras_note = extras_note
+            update_fields.append("extras_note")
+        if update_fields:
+            instance.save(update_fields=update_fields)
+        return instance
 
 
 class BoardingPointWriteSerializer(serializers.ModelSerializer):

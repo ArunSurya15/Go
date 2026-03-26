@@ -413,7 +413,7 @@ export default function PassengerPage() {
           </Card>
 
           {error && <p className="text-sm text-destructive mt-4">{error}</p>}
-          <Button className="w-full mt-6 bg-red-600 hover:bg-red-700" onClick={handleProceed} disabled={loading}>
+          <Button className="w-full mt-6" onClick={handleProceed} disabled={loading}>
             {loading ? "Proceeding…" : "Proceed to payment"}
           </Button>
         </div>

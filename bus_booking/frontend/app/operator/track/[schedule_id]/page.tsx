@@ -151,7 +151,7 @@ export default function OperatorTrackPage() {
   if (!schedule) {
     return (
       <div className="container mx-auto px-4 py-12 max-w-md text-center">
-        <p className="text-red-600 mb-4">{error || "Schedule not found."}</p>
+        <p className="text-destructive mb-4">{error || "Schedule not found."}</p>
         <Button asChild>
           <Link href="/operator/dashboard">Back to dashboard</Link>
         </Button>
@@ -269,7 +269,7 @@ export default function OperatorTrackPage() {
           </div>
 
           {error && (
-            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">{error}</div>
           )}
           {success && (
             <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</div>

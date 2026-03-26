@@ -1,9 +1,13 @@
 from typing import Optional
 from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import Route
 from .serializers import RouteSerializer
 from rest_framework.permissions import AllowAny
 from django.db.models import Q
+
+from buses.constants import BUS_FEATURE_DEFINITIONS
 
 class RouteListView(generics.ListAPIView):
     queryset = Route.objects.all()
@@ -42,3 +46,12 @@ class RouteListView(generics.ListAPIView):
                 q_dest |= Q(destination__icontains=norm_d)
             qs = qs.filter(q_dest)
         return qs
+
+
+class BusFeatureCatalogView(APIView):
+    """Public list of amenity ids/labels for operators (add bus) and passengers (filters)."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"features": BUS_FEATURE_DEFINITIONS})

@@ -58,7 +58,7 @@ export default function TrackBusPage() {
       <div className="container max-w-lg py-12">
         <Card>
           <CardContent className="py-8 text-center">
-            <p className="text-red-600">{error || "Not found."}</p>
+            <p className="text-destructive">{error || "Not found."}</p>
             <Link href="/" className="mt-4 inline-block">
               <Button variant="outline">Back to home</Button>
             </Link>

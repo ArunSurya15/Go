@@ -4,7 +4,9 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { operatorApi } from "@/lib/api";
+import { operatorApi, routes, type BusFeatureDef } from "@/lib/api";
+import { BUS_FEATURES_FALLBACK } from "@/lib/bus-features";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,6 +101,24 @@ export default function AddBusPage() {
   });
   const [selectedType, setSelectedType] = useState<SeatCellType>("seater");
   const [cellTypes, setCellTypes] = useState<SeatCellType[]>(() => Array(9 * 4).fill("seater"));
+  const [featureCatalog, setFeatureCatalog] = useState<BusFeatureDef[]>(BUS_FEATURES_FALLBACK);
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+  const [extrasNote, setExtrasNote] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await routes.busFeatures();
+        if (!cancelled && Array.isArray(r.features) && r.features.length > 0) {
+          setFeatureCatalog(r.features);
+        }
+      } catch {
+        if (!cancelled) setFeatureCatalog(BUS_FEATURES_FALLBACK);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +132,12 @@ export default function AddBusPage() {
     })();
     return () => { cancelled = true; };
   }, [getValidToken, router]);
+
+  const toggleFeature = (id: string) => {
+    setSelectedFeatures((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
 
   const totalCells = form.rows * form.cols;
   const capacityFromLayout = useMemo(() => {
@@ -194,6 +220,8 @@ export default function AddBusPage() {
         registration_no: form.registration_no.trim(),
         capacity,
         seat_map: { rows, cols, labels, types },
+        features: selectedFeatures,
+        extras_note: extrasNote.trim(),
       });
       router.push("/operator/dashboard");
       router.refresh();
@@ -231,7 +259,7 @@ export default function AddBusPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 border border-amber-200">{error}</p>
             )}
 
             <div className="space-y-2">
@@ -261,6 +289,60 @@ export default function AddBusPage() {
                 required
                 className="w-full"
               />
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-800">Amenities</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Tick what this bus offers — passengers can filter by these on the schedules page.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {featureCatalog.map((f) => {
+                  const on = selectedFeatures.includes(f.id);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleFeature(f.id)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        on
+                          ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25 ring-2 ring-primary/30"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-primary/40 hover:bg-primary/5"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px]",
+                            on ? "border-primary bg-primary text-primary-foreground" : "border-slate-300 bg-white"
+                          )}
+                          aria-hidden
+                        >
+                          {on ? "✓" : ""}
+                        </span>
+                        {f.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="extras_note">Extra details (optional)</Label>
+                <textarea
+                  id="extras_note"
+                  value={extrasNote}
+                  onChange={(e) => setExtrasNote(e.target.value)}
+                  placeholder="e.g. Pillow on request, veg meals available at halt…"
+                  maxLength={500}
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-[80px] resize-y"
+                />
+                <p className="text-xs text-slate-500">{extrasNote.length}/500</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -314,7 +396,7 @@ export default function AddBusPage() {
                           type="button"
                           onClick={() => setSelectedType(st.id)}
                           className={`rounded-lg border-2 px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${st.color} ${
-                            selectedType === st.id ? "ring-2 ring-offset-2 ring-indigo-500" : ""
+                            selectedType === st.id ? "ring-2 ring-offset-2 ring-primary" : ""
                           }`}
                         >
                           {st.icon}

@@ -1,14 +1,32 @@
+import json
+
 from rest_framework import serializers
 from .models import Schedule, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
 from common.serializers import RouteSerializer
 from buses.models import Bus
+from buses.utils import infer_layout_kind
+
 
 class BusSlimSerializer(serializers.ModelSerializer):
     operator_name = serializers.CharField(source='operator.name', read_only=True)
+    features = serializers.SerializerMethodField()
+    layout_kind = serializers.SerializerMethodField()
 
     class Meta:
         model = Bus
-        fields = ('id', 'registration_no', 'capacity', 'operator_name')
+        fields = (
+            'id', 'registration_no', 'capacity', 'operator_name',
+            'features', 'layout_kind', 'extras_note',
+        )
+
+    def get_features(self, obj):
+        try:
+            return json.loads(obj.features_json or '[]')
+        except Exception:
+            return []
+
+    def get_layout_kind(self, obj):
+        return infer_layout_kind(obj.seat_map_json or '')
 
 class ScheduleSerializer(serializers.ModelSerializer):
     route = RouteSerializer(read_only=True)

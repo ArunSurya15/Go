@@ -64,10 +64,23 @@ class Command(BaseCommand):
         ]
         buses = []
         bus_seater = bus_mixed = bus_sleeper = bus_sleeper_large = bus_semi = None
-        for reg_no, seat_map, capacity, _ in buses_data:
+        bus_features = [
+            json.dumps(["ac", "wifi", "charging", "water"]),
+            json.dumps(["ac", "wifi", "blanket", "live_tracking"]),
+            json.dumps(["ac", "wifi", "water", "blanket", "toilet"]),
+            json.dumps(["ac", "wifi", "charging", "entertainment", "blanket"]),
+            json.dumps(["ac", "wifi", "charging", "reading_lamp", "snacks"]),
+        ]
+        for idx, (reg_no, seat_map, capacity, _) in enumerate(buses_data):
             bus, _ = Bus.objects.update_or_create(
                 registration_no=reg_no,
-                defaults={'operator': op, 'capacity': capacity, 'seat_map_json': json.dumps(seat_map)}
+                defaults={
+                    'operator': op,
+                    'capacity': capacity,
+                    'seat_map_json': json.dumps(seat_map),
+                    'features_json': bus_features[idx % len(bus_features)],
+                    'extras_note': 'Priority boarding on request' if idx == 0 else '',
+                }
             )
             buses.append(bus)
         bus_seater, bus_mixed, bus_sleeper, bus_sleeper_large, bus_semi = buses[0], buses[1], buses[2], buses[3], buses[4]

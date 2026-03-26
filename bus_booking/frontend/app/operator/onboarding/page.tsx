@@ -360,7 +360,7 @@ export default function OperatorOnboardingPage() {
                 />
               </div>
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             <Button onClick={saveStep1} disabled={saving || !form.name || !form.business_background} className="bg-indigo-600 hover:bg-indigo-700">
               {saving ? "Saving…" : "Next: Business & tax"}
             </Button>
@@ -430,7 +430,7 @@ export default function OperatorOnboardingPage() {
                 placeholder="Optional"
               />
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
               <Button onClick={saveStep2} disabled={saving || !form.pan.trim()} className="bg-indigo-600 hover:bg-indigo-700">
@@ -481,7 +481,7 @@ export default function OperatorOnboardingPage() {
                 placeholder="e.g. SBIN0001234"
               />
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
               <Button onClick={saveStep3} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">

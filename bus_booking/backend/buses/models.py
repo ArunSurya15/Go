@@ -14,6 +14,10 @@ class Bus(models.Model):
     registration_no = models.CharField(max_length=50, unique=True)
     capacity = models.PositiveIntegerField()
     seat_map_json = models.TextField(default=dict, blank=True)
+    # JSON list of feature ids from BUS_FEATURE_DEFINITIONS (e.g. ["ac","wifi"])
+    features_json = models.TextField(default='[]', blank=True)
+    # Free text for anything not in the checklist
+    extras_note = models.CharField(max_length=500, blank=True, default='')
 
     def __str__(self):
         return f"{self.registration_no} ({self.capacity})"

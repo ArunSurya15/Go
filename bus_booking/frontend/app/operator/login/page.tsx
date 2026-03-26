@@ -81,7 +81,7 @@ export default function OperatorLoginPage() {
                 className="border-slate-300"
               />
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={loading}>
               {loading ? "Signing in…" : "Sign in"}
             </Button>

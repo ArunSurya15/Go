@@ -463,7 +463,7 @@ function DeckGrid({
               )}
               {isAvailable && (
                 <span
-                  className={`text-[10px] leading-none block ${femaleOnlyHighlight ? "text-pink-700" : ""}`}
+                  className="text-[10px] leading-none block text-gray-500 dark:text-gray-400"
                   style={{ margin: 0 }}
                 >
                   ₹{fareInt}
