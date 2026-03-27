@@ -133,8 +133,19 @@ export default function SchedulesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
-        <div className="space-y-4 min-w-0 order-2 lg:order-1">
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-6 items-start">
+        {schedules.length > 0 && (
+          <div className="lg:sticky lg:top-4 lg:self-start">
+            <ScheduleFiltersPanel
+              schedules={schedules}
+              featureCatalog={featureCatalog}
+              filters={filters}
+              onChange={setFilters}
+            />
+          </div>
+        )}
+
+        <div className="space-y-4 min-w-0">
           {schedules.length > 0 && (
             <p className="text-sm text-muted-foreground">
               Showing <strong className="text-foreground">{filteredSchedules.length}</strong> of{" "}
@@ -168,7 +179,7 @@ export default function SchedulesPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.03 }}
                   >
-                    <Card className="overflow-hidden border rounded-xl hover:shadow-md transition-shadow">
+                    <Card className="group overflow-hidden rounded-xl border shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-primary/45 hover:shadow-[0_14px_40px_-10px_hsl(var(--primary)/0.2)] hover:bg-primary/[0.03] dark:hover:bg-primary/[0.07] dark:hover:shadow-[0_14px_40px_-10px_hsl(var(--primary)/0.25)]">
                       <CardContent className="p-0">
                         <div className="flex flex-col sm:flex-row sm:items-stretch gap-4 p-4 sm:p-5">
                           <div className="flex-1 min-w-0 space-y-2">
@@ -236,17 +247,6 @@ export default function SchedulesPage() {
             )}
           </AnimatePresence>
         </div>
-
-        {schedules.length > 0 && (
-          <div className="order-1 lg:order-2 lg:sticky lg:top-4">
-            <ScheduleFiltersPanel
-              schedules={schedules}
-              featureCatalog={featureCatalog}
-              filters={filters}
-              onChange={setFilters}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

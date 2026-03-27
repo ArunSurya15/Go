@@ -1,9 +1,104 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
+import {
+  Armchair,
+  Bath,
+  BedDouble,
+  Bus,
+  Clapperboard,
+  Cookie,
+  Droplets,
+  IndianRupee,
+  Lamp,
+  LayoutGrid,
+  MapPinned,
+  Moon,
+  PlugZap,
+  Sheet,
+  Snowflake,
+  Sofa,
+  Sparkles,
+  Sun,
+  Sunrise,
+  Sunset,
+  Wifi,
+} from "lucide-react";
 import type { Schedule, BusFeatureDef } from "@/lib/api";
 import { LAYOUT_KIND_LABELS } from "@/lib/bus-features";
 import { cn } from "@/lib/utils";
+
+/** Lucide icons: crisp at any size, inherit `currentColor` for selected chips — preferable to PNG for dense UI */
+const chipIcon = {
+  size: 22,
+  strokeWidth: 1.75,
+  className: "shrink-0 opacity-90",
+  "aria-hidden": true,
+} as const;
+
+const headingIcon = {
+  size: 18,
+  strokeWidth: 1.75,
+  className: "shrink-0 opacity-80",
+  "aria-hidden": true,
+} as const;
+
+function featureIcon(id: string): ReactNode {
+  switch (id) {
+    case "ac":
+      return <Snowflake {...chipIcon} />;
+    case "wifi":
+      return <Wifi {...chipIcon} />;
+    case "water":
+      return <Droplets {...chipIcon} />;
+    case "charging":
+      return <PlugZap {...chipIcon} />;
+    case "blanket":
+      return <Sheet {...chipIcon} />;
+    case "toilet":
+      return <Bath {...chipIcon} />;
+    case "entertainment":
+      return <Clapperboard {...chipIcon} />;
+    case "live_tracking":
+      return <MapPinned {...chipIcon} />;
+    case "reading_lamp":
+      return <Lamp {...chipIcon} />;
+    case "snacks":
+      return <Cookie {...chipIcon} />;
+    default:
+      return <Sparkles {...chipIcon} />;
+  }
+}
+
+function timeIcon(id: string): ReactNode {
+  switch (id) {
+    case "before10":
+      return <Sunrise {...chipIcon} />;
+    case "10to17":
+      return <Sun {...chipIcon} />;
+    case "17to23":
+      return <Sunset {...chipIcon} />;
+    case "after23":
+      return <Moon {...chipIcon} />;
+    default:
+      return <Sun {...chipIcon} />;
+  }
+}
+
+function layoutIcon(id: string): ReactNode {
+  switch (id) {
+    case "seater":
+      return <Armchair {...chipIcon} />;
+    case "sleeper":
+      return <BedDouble {...chipIcon} />;
+    case "semi":
+      return <Sofa {...chipIcon} />;
+    case "mixed":
+      return <LayoutGrid {...chipIcon} />;
+    default:
+      return <Armchair {...chipIcon} />;
+  }
+}
 
 export type ScheduleFilterState = {
   priceMin: number;
@@ -114,13 +209,16 @@ function DualPriceRange({ min, max, valueMin, valueMax, onChangeMin, onChangeMax
           onChangeMin(Math.min(v, valueMax));
         }}
         className={cn(
-          "price-range-input pointer-events-none absolute h-10 w-full appearance-none bg-transparent p-0",
-          "[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent",
+          "price-range-input pointer-events-none absolute left-0 right-0 top-1/2 w-full -translate-y-1/2 appearance-none bg-transparent p-0",
+          /* Fixed height so the native track sits on the same line as our custom track */
+          "h-8",
+          "[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent",
+          /* Thumb taller than track: WebKit needs negative margin to center thumb on track */
           "[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-10 [&::-webkit-slider-thumb]:appearance-none",
           "[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full",
-          "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-primary",
+          "[&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-primary",
           "[&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:shadow-primary/30",
-          "[&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent",
+          "[&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-transparent",
           "[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full",
           "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-primary",
           "[&::-moz-range-thumb]:shadow-md"
@@ -139,13 +237,14 @@ function DualPriceRange({ min, max, valueMin, valueMax, onChangeMin, onChangeMax
           onChangeMax(Math.max(v, valueMin));
         }}
         className={cn(
-          "price-range-input pointer-events-none absolute h-10 w-full appearance-none bg-transparent p-0",
-          "[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent",
+          "price-range-input pointer-events-none absolute left-0 right-0 top-1/2 w-full -translate-y-1/2 appearance-none bg-transparent p-0",
+          "h-8",
+          "[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent",
           "[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-10 [&::-webkit-slider-thumb]:appearance-none",
           "[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full",
-          "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-primary",
+          "[&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-primary",
           "[&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:shadow-primary/30",
-          "[&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent",
+          "[&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-transparent",
           "[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full",
           "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-primary",
           "[&::-moz-range-thumb]:shadow-md"
@@ -215,7 +314,10 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
       <div className="space-y-5 p-4">
         {/* Price — single track, two handles */}
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground mb-2">Price range</h3>
+          <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+            <IndianRupee {...headingIcon} />
+            Price range
+          </h3>
           {sameFare ? (
             <p className="text-sm tabular-nums font-medium text-foreground">₹{bounds.min}</p>
           ) : (
@@ -238,7 +340,10 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
 
         {/* Departure time */}
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground mb-2">Departure time</h3>
+          <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+            <Sun {...headingIcon} />
+            Departure time
+          </h3>
           <div className="grid grid-cols-2 gap-2">
             {TIME_OPTIONS.map((t) => (
               <button
@@ -246,11 +351,12 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
                 type="button"
                 onClick={() => toggleInSet("timeBuckets", t.id, filters.timeBuckets)}
                 className={cn(
-                  "rounded-lg border px-2 py-2.5 text-left text-[11px] font-semibold transition-all",
+                  "rounded-lg border px-2 py-2.5 text-[11px] font-semibold transition-all flex flex-col items-center justify-center gap-1.5 min-h-[64px] text-center leading-tight",
                   filters.timeBuckets.has(t.id) ? chipSelected : chipIdle
                 )}
               >
-                {t.label}
+                {timeIcon(t.id)}
+                <span>{t.label}</span>
               </button>
             ))}
           </div>
@@ -258,7 +364,10 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
 
         {/* Bus type */}
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground mb-2">Bus type</h3>
+          <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+            <Bus {...headingIcon} />
+            Bus type
+          </h3>
           <div className="grid grid-cols-2 gap-2">
             {LAYOUT_OPTIONS.map((t) => (
               <button
@@ -266,11 +375,12 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
                 type="button"
                 onClick={() => toggleInSet("layoutKinds", t.id, filters.layoutKinds)}
                 className={cn(
-                  "rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all text-center min-h-[44px] flex items-center justify-center",
+                  "rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all flex flex-col items-center justify-center gap-1.5 min-h-[72px] text-center leading-tight",
                   filters.layoutKinds.has(t.id) ? chipSelected : chipIdle
                 )}
               >
-                {t.label}
+                {layoutIcon(t.id)}
+                <span>{t.label}</span>
               </button>
             ))}
           </div>
@@ -278,7 +388,10 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
 
         {/* Amenities — same selectable tile style as bus type */}
         <section>
-          <h3 className="text-xs font-medium text-muted-foreground mb-2">Amenities</h3>
+          <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+            <Sparkles {...headingIcon} />
+            Amenities
+          </h3>
           <p className="text-[10px] text-muted-foreground mb-2">
             Show buses that include <span className="font-medium text-foreground">all</span> selected
           </p>
@@ -292,11 +405,12 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
                   aria-pressed={on}
                   onClick={() => toggleInSet("requiredFeatures", feat.id, filters.requiredFeatures)}
                   className={cn(
-                    "rounded-xl border px-2.5 py-2.5 text-left text-[11px] font-semibold leading-snug transition-all min-h-[44px] flex items-center justify-center text-center",
+                    "rounded-xl border px-2 py-2.5 text-[11px] font-semibold leading-snug transition-all min-h-[72px] flex flex-col items-center justify-center gap-1.5 text-center",
                     on ? chipSelected : chipIdle
                   )}
                 >
-                  {feat.label}
+                  {featureIcon(feat.id)}
+                  <span>{feat.label}</span>
                 </button>
               );
             })}
