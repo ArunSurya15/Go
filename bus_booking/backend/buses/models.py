@@ -18,6 +18,11 @@ class Bus(models.Model):
     features_json = models.TextField(default='[]', blank=True)
     # Free text for anything not in the checklist
     extras_note = models.CharField(max_length=500, blank=True, default='')
+    # Optional marketing line, e.g. "Bharat Benz A/C Sleeper (2+1)"
+    service_name = models.CharField(max_length=200, blank=True, default='')
+    # Aggregates from passenger ratings (after completed trips)
+    rating_avg = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    rating_count = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return f"{self.registration_no} ({self.capacity})"

@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, time, timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
@@ -55,12 +56,13 @@ class Command(BaseCommand):
             demo_op_user.save(update_fields=['operator'])
 
         # Five bus types: full seater, mixed (seater + sleeper), full sleeper, large sleeper, semi-sleeper
+        # Varied demo ratings: green (≥4), yellow (3–<4), red (<3) — see schedule card star badges
         buses_data = [
-            ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 40, 'Seater 2x2'),
-            ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 30, 'Mixed (lower seater, upper sleeper)'),
-            ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 30, 'Sleeper 1x2'),
-            ('KA04SL3456', LAYOUT_SLEEPER_1X2_LARGE, 36, 'Sleeper (large)'),
-            ('KA05SS7890', LAYOUT_SEMI_SLEEPER_2X2_AISLE, 40, 'Semi-sleeper 2x2'),
+            ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 40, 'Seater 2x2', 'Bharat Benz A/C Seater (2+2)', Decimal('4.65'), 320),
+            ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 30, 'Mixed (lower seater, upper sleeper)', 'Volvo Multi-Axle (2+1)', Decimal('3.35'), 180),
+            ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 30, 'Sleeper 1x2', 'Bharat Benz A/C Sleeper (2+1)', Decimal('4.20'), 504),
+            ('KA04SL3456', LAYOUT_SLEEPER_1X2_LARGE, 36, 'Sleeper (large)', 'Scania Sleeper (2+1)', Decimal('2.55'), 210),
+            ('KA05SS7890', LAYOUT_SEMI_SLEEPER_2X2_AISLE, 40, 'Semi-sleeper 2x2', 'Mercedes Semi-Sleeper (2+2)', Decimal('3.70'), 95),
         ]
         buses = []
         bus_seater = bus_mixed = bus_sleeper = bus_sleeper_large = bus_semi = None
@@ -71,7 +73,7 @@ class Command(BaseCommand):
             json.dumps(["ac", "wifi", "charging", "entertainment", "blanket"]),
             json.dumps(["ac", "wifi", "charging", "reading_lamp", "snacks"]),
         ]
-        for idx, (reg_no, seat_map, capacity, _) in enumerate(buses_data):
+        for idx, (reg_no, seat_map, capacity, _, service_name, rating_avg, rating_count) in enumerate(buses_data):
             bus, _ = Bus.objects.update_or_create(
                 registration_no=reg_no,
                 defaults={
@@ -80,6 +82,9 @@ class Command(BaseCommand):
                     'seat_map_json': json.dumps(seat_map),
                     'features_json': bus_features[idx % len(bus_features)],
                     'extras_note': 'Priority boarding on request' if idx == 0 else '',
+                    'service_name': service_name,
+                    'rating_avg': rating_avg,
+                    'rating_count': rating_count,
                 }
             )
             buses.append(bus)
@@ -114,6 +119,21 @@ class Command(BaseCommand):
                 )
                 if created:
                     created_count += 1
+
+        # Sample operator / platform promos and MRP (strikethrough fare) on some rows
+        for i, s in enumerate(
+            Schedule.objects.filter(route=route, status='ACTIVE').order_by('id')[:80]
+        ):
+            uf = []
+            if i % 6 == 0:
+                s.fare_original = (s.fare * Decimal('1.11')).quantize(Decimal('0.01'))
+                s.operator_promo_title = 'Exclusive ₹100 OFF'
+                uf.extend(['fare_original', 'operator_promo_title'])
+            if i % 7 == 0:
+                s.platform_promo_title = 'Min. 10% OFF on 3 or more seats'
+                uf.append('platform_promo_title')
+            if uf:
+                s.save(update_fields=uf)
 
         # Ensure all schedules for this route have boarding/dropping points
         for s in Schedule.objects.filter(route=route).select_related('route', 'bus'):

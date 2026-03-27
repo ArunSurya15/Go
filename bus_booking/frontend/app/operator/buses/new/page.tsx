@@ -94,6 +94,7 @@ export default function AddBusPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     registration_no: "",
+    service_name: "",
     layout_template: "standard_2_2",
     capacity: 36,
     rows: 9,
@@ -222,6 +223,7 @@ export default function AddBusPage() {
         seat_map: { rows, cols, labels, types },
         features: selectedFeatures,
         extras_note: extrasNote.trim(),
+        ...(form.service_name.trim() ? { service_name: form.service_name.trim() } : {}),
       });
       router.push("/operator/dashboard");
       router.refresh();
@@ -289,6 +291,18 @@ export default function AddBusPage() {
                 required
                 className="w-full"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="service_name">Service name (optional)</Label>
+              <Input
+                id="service_name"
+                value={form.service_name}
+                onChange={(e) => setForm((f) => ({ ...f, service_name: e.target.value }))}
+                placeholder='e.g. Bharat Benz A/C Sleeper (2+1)'
+                className="w-full"
+              />
+              <p className="text-xs text-slate-500">Shown on search results under your operator name.</p>
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">

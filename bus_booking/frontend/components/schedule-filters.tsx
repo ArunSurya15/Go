@@ -18,6 +18,7 @@ import {
   Sheet,
   Snowflake,
   Sofa,
+  SlidersHorizontal,
   Sparkles,
   Sun,
   Sunrise,
@@ -299,21 +300,39 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
   const sameFare = bounds.min === bounds.max;
 
   return (
-    <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
-      <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">Filters</h2>
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl border-2 border-primary/25 bg-card text-card-foreground",
+        "shadow-[0_10px_50px_-14px_hsl(var(--primary)/0.22)] dark:border-primary/35 dark:shadow-[0_12px_50px_-12px_hsl(var(--primary)/0.35)]",
+        "ring-1 ring-primary/15",
+        "before:pointer-events-none before:absolute before:inset-y-3 before:left-0 before:z-10 before:w-1 before:rounded-full before:bg-gradient-to-b before:from-primary before:to-primary/50"
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-primary/10 bg-gradient-to-r from-primary/[0.09] via-primary/[0.04] to-transparent px-4 py-3.5 pl-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary shadow-inner shadow-primary/10 ring-1 ring-primary/20"
+            aria-hidden
+          >
+            <SlidersHorizontal className="h-5 w-5" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold tracking-tight text-foreground">Filters</h2>
+            <p className="text-[10px] text-muted-foreground">Narrow by price, time & amenities</p>
+          </div>
+        </div>
         <button
           type="button"
           onClick={clearAll}
-          className="text-xs text-muted-foreground hover:text-primary transition-colors"
+          className="shrink-0 rounded-full border border-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
         >
           Clear all
         </button>
       </div>
 
-      <div className="space-y-5 p-4">
+      <div className="space-y-0 divide-y divide-border/70 p-4 sm:p-5">
         {/* Price — single track, two handles */}
-        <section>
+        <section className="pb-5 pt-0 first:pt-0">
           <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
             <IndianRupee {...headingIcon} />
             Price range
@@ -339,7 +358,7 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
         </section>
 
         {/* Departure time */}
-        <section>
+        <section className="py-5">
           <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
             <Sun {...headingIcon} />
             Departure time
@@ -363,7 +382,7 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
         </section>
 
         {/* Bus type */}
-        <section>
+        <section className="py-5">
           <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
             <Bus {...headingIcon} />
             Bus type
@@ -387,7 +406,7 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
         </section>
 
         {/* Amenities — same selectable tile style as bus type */}
-        <section>
+        <section className="pb-0 pt-5">
           <h3 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
             <Sparkles {...headingIcon} />
             Amenities
@@ -418,9 +437,14 @@ export function ScheduleFiltersPanel({ schedules, featureCatalog, filters, onCha
         </section>
 
         {activeCount > 0 && (
-          <p className="text-[10px] text-muted-foreground">
-            {activeCount} filter{activeCount !== 1 ? "s" : ""} active
-          </p>
+          <div className="flex items-center justify-center pt-4">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/12 px-3 py-1.5 text-xs font-semibold text-primary ring-1 ring-primary/25">
+              <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
+                {activeCount}
+              </span>
+              active filter{activeCount !== 1 ? "s" : ""}
+            </span>
+          </div>
         )}
       </div>
     </div>

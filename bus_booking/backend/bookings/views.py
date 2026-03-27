@@ -3,7 +3,11 @@ from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .models import Schedule, ScheduleLocation, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+
+from .models import Schedule, ScheduleLocation, BoardingPoint, DroppingPoint, Reservation, Booking, Payment, BusRating
+from .rating_utils import refresh_bus_rating_aggregate
 from .serializers import (
     ScheduleSerializer, BoardingPointSerializer, DroppingPointSerializer,
     ReservationSerializer, BookingSerializer, PaymentSerializer,
@@ -12,11 +16,6 @@ from .serializers import (
 import razorpay
 from django.conf import settings
 from decimal import Decimal
-from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from .models import Schedule, Booking, Payment
-from django.utils import timezone
 
 from .lock import try_hold_seats, release_seats
 from .seat_rules import (
@@ -481,3 +480,43 @@ class TicketDownloadView(generics.RetrieveAPIView):
         )
         response['Content-Disposition'] = f'attachment; filename="{booking.ticket_file}"'
         return response
+
+
+class SubmitBusRatingView(APIView):
+    """
+    POST: rate the bus for a completed trip (one rating per booking).
+    Future: trigger via email/SMS link after arrival — same endpoint.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        booking = get_object_or_404(
+            Booking.objects.select_related("schedule", "schedule__bus"),
+            pk=pk,
+            user=request.user,
+        )
+        if booking.status != "CONFIRMED":
+            return Response({"detail": "Only confirmed bookings can be rated."}, status=400)
+        if BusRating.objects.filter(booking=booking).exists():
+            return Response({"detail": "This trip was already rated."}, status=400)
+        if booking.schedule.arrival_dt > timezone.now():
+            return Response(
+                {"detail": "You can submit a rating after the scheduled arrival time."},
+                status=400,
+            )
+        try:
+            stars = int(request.data.get("stars"))
+        except (TypeError, ValueError):
+            return Response({"detail": "stars must be an integer from 1 to 5."}, status=400)
+        if stars < 1 or stars > 5:
+            return Response({"detail": "stars must be from 1 to 5."}, status=400)
+        comment = str(request.data.get("comment") or "")[:500]
+        BusRating.objects.create(
+            booking=booking,
+            bus=booking.schedule.bus,
+            user=request.user,
+            stars=stars,
+            comment=comment,
+        )
+        refresh_bus_rating_aggregate(booking.schedule.bus)
+        return Response({"detail": "Thank you for your rating.", "bus_id": booking.schedule.bus_id}, status=201)

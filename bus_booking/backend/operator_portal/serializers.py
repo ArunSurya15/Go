@@ -91,6 +91,7 @@ class OperatorBusSerializer(serializers.ModelSerializer):
             "seat_map",
             "features",
             "extras_note",
+            "service_name",
             "operator",
         )
         read_only_fields = ("operator",)
@@ -108,6 +109,7 @@ class OperatorBusSerializer(serializers.ModelSerializer):
         except Exception:
             data["features"] = []
         data["extras_note"] = instance.extras_note or ""
+        data["service_name"] = instance.service_name or ""
         return data
 
     def create(self, validated_data):
@@ -164,11 +166,14 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
             "departure_dt",
             "arrival_dt",
             "fare",
+            "fare_original",
+            "operator_promo_title",
+            "platform_promo_title",
             "status",
             "boarding_points",
             "dropping_points",
         )
-        read_only_fields = ("status",)
+        read_only_fields = ("status", "platform_promo_title")
 
     def validate_bus(self, value):
         operator = self.context.get("operator")

@@ -40,6 +40,9 @@ MSG91_SENDER_ID = os.getenv('MSG91_SENDER_ID', 'e-GO')
 OTP_TTL_SECONDS = 5 * 60  # 5 min
 OTP_LENGTH = 6
 
+# Optional fallback line on schedule cards when `platform_promo_title` is empty.
+EGO_DEFAULT_PLATFORM_PROMO = os.getenv("EGO_DEFAULT_PLATFORM_PROMO", "")
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 

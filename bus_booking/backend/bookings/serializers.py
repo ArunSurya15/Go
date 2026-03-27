@@ -16,7 +16,8 @@ class BusSlimSerializer(serializers.ModelSerializer):
         model = Bus
         fields = (
             'id', 'registration_no', 'capacity', 'operator_name',
-            'features', 'layout_kind', 'extras_note',
+            'features', 'layout_kind', 'extras_note', 'service_name',
+            'rating_avg', 'rating_count',
         )
 
     def get_features(self, obj):
@@ -31,10 +32,22 @@ class BusSlimSerializer(serializers.ModelSerializer):
 class ScheduleSerializer(serializers.ModelSerializer):
     route = RouteSerializer(read_only=True)
     bus = BusSlimSerializer(read_only=True)
+    platform_promo_line = serializers.SerializerMethodField()
 
     class Meta:
         model = Schedule
-        fields = ('id', 'route', 'bus', 'departure_dt', 'arrival_dt', 'fare', 'status')
+        fields = (
+            'id', 'route', 'bus', 'departure_dt', 'arrival_dt', 'fare', 'status',
+            'fare_original', 'operator_promo_title', 'platform_promo_title',
+            'platform_promo_line',
+        )
+
+    def get_platform_promo_line(self, obj):
+        from django.conf import settings as dj_settings
+        if obj.platform_promo_title:
+            return obj.platform_promo_title
+        default = getattr(dj_settings, 'EGO_DEFAULT_PLATFORM_PROMO', '') or ''
+        return default.strip() or None
 
 
 class BoardingPointSerializer(serializers.ModelSerializer):

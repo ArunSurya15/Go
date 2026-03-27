@@ -5,6 +5,7 @@ from decimal import Decimal
 from buses.models import Bus
 from common.models import Route
 
+
 class Schedule(models.Model):
     STATUS_CHOICES = (
         ('PENDING', 'Pending'),   # awaiting admin approval
@@ -16,6 +17,12 @@ class Schedule(models.Model):
     departure_dt = models.DateTimeField()
     arrival_dt = models.DateTimeField()
     fare = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    # Optional "MRP" for strikethrough when running a discount
+    fare_original = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Operator-entered promo line for this trip (e.g. "Exclusive ₹100 OFF")
+    operator_promo_title = models.CharField(max_length=160, blank=True, default='')
+    # e-GO platform promo (set by admin/backend or default in settings)
+    platform_promo_title = models.CharField(max_length=160, blank=True, default='')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
 
     class Meta:
@@ -116,6 +123,25 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"Booking {self.id} - {self.user} - {self.status}"
+
+
+class BusRating(models.Model):
+    """One rating per booking, after the passenger has completed the trip."""
+    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name='bus_rating')
+    bus = models.ForeignKey(Bus, on_delete=models.CASCADE, related_name='ratings')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bus_ratings')
+    stars = models.PositiveSmallIntegerField()  # 1–5
+    comment = models.CharField(max_length=500, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['bus', '-created_at'], name='bookings_busrating_bus_created'),
+        ]
+
+    def __str__(self):
+        return f"BusRating {self.bus_id} {self.stars}★"
+
 
 class Payment(models.Model):
     booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name='payment')

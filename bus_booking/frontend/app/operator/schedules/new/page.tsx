@@ -41,6 +41,8 @@ export default function AddSchedulePage() {
     arrival_date: "",
     arrival_time: "18:00",
     fare: "500",
+    fare_original: "",
+    operator_promo_title: "",
   });
   const [boardingPoints, setBoardingPoints] = useState<BoardingPointWrite[]>([]);
   const [droppingPoints, setDroppingPoints] = useState<DroppingPointWrite[]>([]);
@@ -92,6 +94,12 @@ export default function AddSchedulePage() {
         departure_dt,
         arrival_dt,
         fare: form.fare.trim(),
+        ...(form.fare_original.trim()
+          ? { fare_original: form.fare_original.trim() }
+          : {}),
+        ...(form.operator_promo_title.trim()
+          ? { operator_promo_title: form.operator_promo_title.trim() }
+          : {}),
         boarding_points: boardingPoints.filter((p) => p.location_name.trim()),
         dropping_points: droppingPoints.filter((p) => p.location_name.trim()),
       });
@@ -237,6 +245,30 @@ export default function AddSchedulePage() {
                 placeholder="500.00"
                 required
               />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="fare_original">Original fare / MRP (optional)</Label>
+                <Input
+                  id="fare_original"
+                  type="text"
+                  inputMode="decimal"
+                  value={form.fare_original}
+                  onChange={(e) => setForm((f) => ({ ...f, fare_original: e.target.value }))}
+                  placeholder="Strikethrough price, e.g. 899"
+                />
+                <p className="text-xs text-muted-foreground">Shown crossed out when lower than selling fare.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="operator_promo_title">Offer label (optional)</Label>
+                <Input
+                  id="operator_promo_title"
+                  value={form.operator_promo_title}
+                  onChange={(e) => setForm((f) => ({ ...f, operator_promo_title: e.target.value }))}
+                  placeholder='e.g. Exclusive ₹100 OFF'
+                />
+              </div>
             </div>
 
             <div className="space-y-3">
