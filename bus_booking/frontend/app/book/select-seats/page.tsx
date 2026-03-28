@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { SeatLayout } from "@/components/seat-layout";
+import { JourneyRoutePreview } from "@/components/journey-route-preview";
 import { booking, routes, type SeatMapResponse } from "@/lib/api";
 
 const FLOW_KEY = "bus_booking_flow";
@@ -113,8 +114,11 @@ export default function SelectSeatsPage() {
     );
   }
 
+  const fromLabel = from?.trim() || "Origin";
+  const toLabel = to?.trim() || "Destination";
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -131,14 +135,15 @@ export default function SelectSeatsPage() {
         </div>
 
         <div className="mb-4">
-          <h1 className="text-xl font-bold">{from} → {to}</h1>
+          <h1 className="text-xl font-bold">{fromLabel} → {toLabel}</h1>
           <p className="text-sm text-muted-foreground">{date}</p>
         </div>
 
         {!seatMap ? (
           <p className="text-muted-foreground py-8">Loading seat layout…</p>
         ) : (
-          <>
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+            <div className="min-w-0">
             <SeatLayout
               layout={seatMap.layout}
               occupied={seatMap.occupied}
@@ -174,7 +179,12 @@ export default function SelectSeatsPage() {
                 {loading ? "Reserving…" : "Select boarding & dropping points"}
               </Button>
             </div>
-          </>
+            </div>
+
+            <aside className="lg:sticky lg:top-4 order-first lg:order-none">
+              <JourneyRoutePreview from={fromLabel} to={toLabel} />
+            </aside>
+          </div>
         )}
       </motion.div>
     </div>

@@ -621,7 +621,7 @@ export default function SchedulesPage() {
   const hasQuery = Boolean(routeId && date);
 
   return (
-    <div className="w-full min-h-[calc(100vh-3.5rem)] bg-slate-100 dark:bg-zinc-950">
+    <div className="w-full min-h-[calc(100vh-3.5rem)] bg-neutral-100 dark:bg-neutral-950">
       <div className="container mx-auto max-w-6xl px-4 py-6">
       {hasQuery && routeId && date ? (
         <SchedulesTripHeader
@@ -704,7 +704,7 @@ export default function SchedulesPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.03 }}
                   >
-                    <Card className="group relative overflow-hidden rounded-xl border border-zinc-200/95 bg-white shadow-[0_2px_14px_-4px_rgba(15,23,42,0.1)] ring-1 ring-zinc-950/[0.05] transition-[box-shadow,transform,border-color] duration-200 ease-out hover:-translate-y-1 hover:border-zinc-300/90 hover:bg-white hover:shadow-[0_12px_40px_-12px_rgba(15,23,42,0.14),0_8px_24px_-8px_rgba(15,23,42,0.08)] dark:border-zinc-800 dark:bg-zinc-900/60 dark:ring-white/[0.06] dark:shadow-[0_2px_20px_-6px_rgba(0,0,0,0.45)] dark:hover:border-zinc-600 dark:hover:bg-zinc-900/60 dark:hover:shadow-[0_14px_36px_-12px_rgba(0,0,0,0.55)]">
+                    <Card className="group relative overflow-hidden rounded-xl border border-zinc-200/95 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_16px_-4px_rgba(0,0,0,0.12),0_14px_36px_-8px_rgba(0,0,0,0.14)] ring-1 ring-black/[0.04] transition-[box-shadow,transform,border-color] duration-200 ease-out hover:-translate-y-1 hover:border-zinc-300/90 hover:bg-white hover:shadow-[0_2px_4px_rgba(0,0,0,0.06),0_10px_24px_-4px_rgba(0,0,0,0.16),0_22px_48px_-10px_rgba(0,0,0,0.18)] dark:border-zinc-800 dark:bg-zinc-900/60 dark:ring-white/[0.06] dark:shadow-[0_4px_14px_-2px_rgba(0,0,0,0.5),0_12px_32px_-6px_rgba(0,0,0,0.45)] dark:hover:border-zinc-600 dark:hover:bg-zinc-900/60 dark:hover:shadow-[0_6px_18px_-2px_rgba(0,0,0,0.55),0_16px_40px_-8px_rgba(0,0,0,0.5)]">
                       {s.operator_promo_title ? (
                         <div
                           className="absolute right-0 top-0 z-10 max-w-[55%] rounded-bl-lg bg-gradient-to-b from-amber-300 to-amber-500 px-2.5 py-1 text-[10px] font-bold leading-tight text-amber-950 shadow-sm sm:max-w-[45%] sm:text-[11px]"

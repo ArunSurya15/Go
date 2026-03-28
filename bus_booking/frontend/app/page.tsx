@@ -7,7 +7,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  TravelHeroAmbientScenery,
+  TravelHeroBusCruise,
+  TravelHeroDriftingCloud,
+  TravelHeroHeading,
+  TravelHeroScope,
+  TravelHeroSection,
+  TravelHeroSun,
+} from "@/components/illustrations/animated-travel-hero";
 import { routes } from "@/lib/api";
+
+const containerVariants = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.1, delayChildren: 0.06 },
+  },
+};
+const fadeUp = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
+  },
+};
 
 export default function HomePage() {
   const router = useRouter();
@@ -52,26 +76,50 @@ export default function HomePage() {
 
   return (
     <div className="min-h-[60vh]">
-      <div className="bg-gradient-to-br from-slate-100 via-white to-primary/5 py-10 px-4">
+      <div className="bg-gradient-to-b from-sky-50/40 via-neutral-100 to-primary/[0.04] py-8 px-4 dark:from-zinc-900 dark:via-zinc-950 dark:to-primary/10 sm:py-10">
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="container mx-auto max-w-2xl text-center mb-8"
+          className="container mx-auto max-w-4xl"
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
         >
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-2">
-            Book bus tickets online
-          </h1>
-          <p className="text-muted-foreground">Search buses by route and date.</p>
-        </motion.div>
+          <motion.div variants={fadeUp} className="-mx-1 mb-6 w-full sm:mx-0 sm:mb-8">
+            <TravelHeroSection>
+              <TravelHeroScope>
+                <TravelHeroSun />
+                <TravelHeroDriftingCloud
+                  className="left-[2%] top-[6%] h-11 w-32 md:h-12 md:w-40"
+                  delay={0}
+                  duration={28}
+                  variant={0}
+                />
+                <TravelHeroDriftingCloud
+                  className="left-[26%] top-[2%] h-9 w-28 md:h-10 md:w-36"
+                  delay={2}
+                  duration={22}
+                  variant={1}
+                />
+                <TravelHeroDriftingCloud
+                  className="right-[4%] top-[10%] h-10 w-32 md:h-11 md:w-40"
+                  delay={3.5}
+                  duration={26}
+                  variant={2}
+                />
+                <TravelHeroDriftingCloud
+                  className="right-[20%] top-[4%] h-8 w-24 opacity-90"
+                  delay={5}
+                  duration={20}
+                  variant={0}
+                />
+                <TravelHeroAmbientScenery />
+                <TravelHeroHeading />
+                <TravelHeroBusCruise />
+              </TravelHeroScope>
+            </TravelHeroSection>
+          </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="container mx-auto max-w-2xl"
-        >
-          <Card className="shadow-lg rounded-xl border-0 bg-white">
+          <motion.div variants={fadeUp} className="mx-auto max-w-2xl">
+          <Card className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_8px_30px_-12px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900/80">
             <CardContent className="p-5 md:p-6">
               <form onSubmit={handleSearch} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:gap-2 items-end">
@@ -158,6 +206,7 @@ export default function HomePage() {
               </form>
             </CardContent>
           </Card>
+          </motion.div>
         </motion.div>
       </div>
     </div>

@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { Bus } from "lucide-react";
 
 export function Header() {
   const { token, logout, isLoading } = useAuth();
+  const reduceMotion = useReducedMotion();
 
   return (
     <motion.header
@@ -15,8 +17,26 @@ export function Header() {
       className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
     >
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
-          <span className="text-primary">Bus</span>Go
+        <Link href="/" className="group flex items-center gap-2 font-semibold text-lg">
+          <motion.span
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"
+            animate={
+              reduceMotion
+                ? false
+                : { y: [0, -2, 0], rotate: [0, -4, 4, 0] }
+            }
+            transition={
+              reduceMotion
+                ? undefined
+                : { duration: 3.5, repeat: Infinity, ease: "easeInOut", repeatDelay: 4 }
+            }
+            aria-hidden
+          >
+            <Bus className="h-5 w-5" strokeWidth={2.25} />
+          </motion.span>
+          <span>
+            <span className="text-primary">Bus</span>Go
+          </span>
         </Link>
         <nav className="flex items-center gap-4">
           <Link
