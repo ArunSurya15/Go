@@ -3,10 +3,11 @@ from .views import (
     ScheduleListView, BoardingPointListView, DroppingPointListView,
     ScheduleSeatMapView, ScheduleTrackView,
     ReserveView, CreatePaymentView, PaymentWebhookView, BookingListView,
-    TicketView, TicketDownloadView, SubmitBusRatingView,
+    TicketView, TicketDownloadView, SubmitBusRatingView, BusReviewListView,
 )
 
 urlpatterns = [
+    path('buses/<int:bus_id>/reviews/', BusReviewListView.as_view(), name='bus_reviews'),
     path('schedules/', ScheduleListView.as_view(), name='schedule_list'),
     path('schedules/<int:pk>/seat-map/', ScheduleSeatMapView.as_view(), name='schedule_seat_map'),
     path('schedules/<int:pk>/track/', ScheduleTrackView.as_view(), name='schedule_track'),

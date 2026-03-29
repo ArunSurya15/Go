@@ -10,9 +10,12 @@ from rest_framework.views import APIView
 from common.models import RoutePatternStop
 from .models import Schedule, ScheduleLocation, BoardingPoint, DroppingPoint, Reservation, Booking, Payment, BusRating
 from .rating_utils import refresh_bus_rating_aggregate
+from buses.models import Bus
+
 from .serializers import (
     ScheduleSerializer, BoardingPointSerializer, DroppingPointSerializer,
     ReservationSerializer, BookingSerializer, PaymentSerializer,
+    PublicBusReviewSerializer,
 )
 
 import razorpay
@@ -554,3 +557,23 @@ class SubmitBusRatingView(APIView):
         )
         refresh_bus_rating_aggregate(booking.schedule.bus)
         return Response({"detail": "Thank you for your rating.", "bus_id": booking.schedule.bus_id}, status=201)
+
+
+class BusReviewListView(generics.ListAPIView):
+    """
+    GET: recent passenger reviews (stars + optional comment) for a bus.
+    Public; reviewer usernames are masked in the payload.
+    """
+
+    serializer_class = PublicBusReviewSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        bus_id = self.kwargs["bus_id"]
+        get_object_or_404(Bus, pk=bus_id)
+        return (
+            BusRating.objects.filter(bus_id=bus_id)
+            .select_related("user")
+            .order_by("-created_at")[:50]
+        )

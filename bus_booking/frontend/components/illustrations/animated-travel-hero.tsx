@@ -56,6 +56,46 @@ const titleWord = {
   },
 };
 
+const HERO_WIND_STREAK_TONES = [
+  "from-transparent via-white to-transparent shadow-[0_0_8px_rgba(255,255,255,0.5)] dark:via-zinc-100 dark:shadow-[0_0_7px_rgba(255,255,255,0.2)]",
+  "from-transparent via-zinc-200 to-transparent shadow-[0_0_6px_rgba(228,228,231,0.55)] dark:via-zinc-400 dark:shadow-[0_0_5px_rgba(161,161,170,0.35)]",
+  "from-zinc-300/30 via-white/95 to-zinc-400/25 shadow-[0_0_7px_rgba(255,255,255,0.45)] dark:from-zinc-500/20 dark:via-zinc-300 dark:to-zinc-500/15 dark:shadow-[0_0_6px_rgba(212,212,216,0.25)]",
+  "from-transparent via-zinc-400 to-transparent shadow-[0_0_5px_rgba(161,161,170,0.45)] dark:via-zinc-500 dark:shadow-[0_0_4px_rgba(113,113,122,0.4)]",
+] as const;
+
+/** Trailing speed lines while the hero bus cruises (PNG + vector) — white / grey mix. */
+function HeroCruiseSpeedWind({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <div
+      className="pointer-events-none absolute -left-1 top-1/2 z-[1] flex h-[78%] w-[min(38%,6.25rem)] -translate-y-1/2 flex-col justify-center gap-1 sm:gap-1.5 sm:w-[min(40%,6.75rem)]"
+      aria-hidden
+    >
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <motion.div
+          key={i}
+          className={cn(
+            "h-[2.5px] rounded-full bg-gradient-to-r sm:h-[3px]",
+            HERO_WIND_STREAK_TONES[i % HERO_WIND_STREAK_TONES.length]
+          )}
+          style={{ width: `${52 + i * 7}%`, marginLeft: i * 1.25 }}
+          animate={{
+            opacity: [0.32, 0.98, 0.32],
+            scaleX: [0.5, 1, 0.5],
+            x: [0, -8, 0],
+          }}
+          transition={{
+            duration: 0.36 + i * 0.03,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: i * 0.045,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** Raster hero bus — swap `HERO_BUS_SRC` / file in `public/` for new art. */
 function TravelHeroBusImage({
   reduceMotion,
@@ -85,16 +125,18 @@ function TravelHeroBusImage({
           reduceMotion ? undefined : { duration: cruise ? 2.2 : 2.6, repeat: Infinity, ease: "easeInOut" }
         }
       >
-        <Image
-          src={HERO_BUS_SRC}
-          alt="E Go electric bus"
-          width={640}
-          height={360}
-          className="h-auto w-full object-contain drop-shadow-[0_4px_18px_rgba(0,0,0,0.12)] dark:drop-shadow-[0_4px_22px_rgba(0,0,0,0.4)]"
-          sizes="(max-width: 640px) 48vw, 160px"
-          quality={92}
-          priority
-        />
+        <div className="relative">
+          <Image
+            src={HERO_BUS_SRC}
+            alt="E Go electric bus"
+            width={640}
+            height={360}
+            className="relative z-[2] h-auto w-full object-contain drop-shadow-[0_4px_18px_rgba(0,0,0,0.12)] dark:drop-shadow-[0_4px_22px_rgba(0,0,0,0.4)]"
+            sizes="(max-width: 640px) 48vw, 160px"
+            quality={92}
+            priority
+          />
+        </div>
       </motion.div>
     </motion.div>
   );
@@ -583,42 +625,29 @@ function TravelHeroTreesSvg({ reduceMotion }: { reduceMotion: boolean }) {
   );
 }
 
-/** Realistic asphalt road with lane markings */
-function RealisticRoad({ reduceMotion, className }: { reduceMotion: boolean; className?: string }) {
+/**
+ * Flat grey road, edge to edge — static white dashed center line (no motion).
+ * `reduceMotion` kept for call-site compatibility; markings are always static.
+ */
+function RealisticRoad({ reduceMotion: _reduceMotion, className }: { reduceMotion: boolean; className?: string }) {
   return (
     <div
       className={cn(
-        "relative h-4 w-full overflow-hidden rounded-lg bg-gradient-to-b from-zinc-600 via-zinc-700 to-zinc-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] dark:from-zinc-800 dark:via-zinc-900 dark:to-black",
+        "relative h-4 w-full overflow-hidden bg-zinc-400 dark:bg-zinc-500",
         className
       )}
     >
-      {/* Road texture overlay */}
-      <div className="absolute inset-0 opacity-20 mix-blend-overlay">
-        <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg">
-          <filter id="noise">
-            <feTurbulence baseFrequency="0.9" numOctaves="4" />
-          </filter>
-          <rect width="100%" height="100%" filter="url(#noise)" opacity="0.15" />
-        </svg>
-      </div>
-
-      {/* Lane markings */}
-      <motion.div
-        className="absolute inset-y-0 left-0 flex items-center gap-5 px-0"
-        animate={reduceMotion ? {} : { x: [0, -44] }}
-        transition={reduceMotion ? {} : { duration: 1, repeat: Infinity, ease: "linear" }}
-      >
-        {Array.from({ length: 32 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-0.5 w-8 shrink-0 rounded-full bg-yellow-100/95 shadow-sm dark:bg-yellow-300/40"
-          />
-        ))}
-      </motion.div>
-
-      {/* Road edge highlights */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-500/40 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-zinc-900/60 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-zinc-100/90 dark:bg-zinc-300/80" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-zinc-500/90 dark:bg-zinc-600" />
+      {/* Static center line — repeating dashes */}
+      <div
+        className="pointer-events-none absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 opacity-95 dark:opacity-90"
+        style={{
+          background:
+            "repeating-linear-gradient(90deg, rgb(255 255 255) 0 11px, transparent 11px 24px)",
+        }}
+        aria-hidden
+      />
     </div>
   );
 }
@@ -916,34 +945,48 @@ export function TravelHeroRoadStrip({ className }: { className?: string }) {
   );
 }
 
-/** Coach only — cruises across the section; no road bar / rectangle. */
+/**
+ * Cruise strip: road is taller (`h-5` / `sm:h-6`), flush to the track bottom, same width as the hero.
+ * Bus row `pb` offsets the bus above the track bottom (`items-end`); smaller `pb` = lower on the road.
+ */
 export function TravelHeroBusCruise({ className }: { className?: string }) {
   const { reduceMotion } = useTravelHeroScope();
   return (
     <div className={cn("relative z-10 w-full px-0 pb-2 pt-1 sm:pb-3 sm:pt-2", className)}>
-      <div className="pointer-events-none relative flex h-[5.25rem] w-full items-end justify-center overflow-visible sm:h-[5.75rem]">
-        <motion.div
-          className="w-[min(48vw,160px)] max-w-[160px] translate-y-[2.35rem] sm:translate-y-[2.75rem] md:translate-y-[3.1rem]"
-          animate={
-            reduceMotion
-              ? { x: 0 }
-              : { x: ["-44vw", "44vw"] }
-          }
-          transition={
-            reduceMotion
-              ? { duration: 0.2 }
-              : {
-                  x: {
-                    duration: 12,
-                    repeat: Infinity,
-                    ease: "linear",
-                    repeatType: "loop",
-                  },
-                }
-          }
-        >
-          <TravelHeroBusVisual reduceMotion={reduceMotion} cruise />
-        </motion.div>
+      <div className="relative w-full min-h-[5rem] sm:min-h-[5.5rem]">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0">
+          <RealisticRoad reduceMotion={reduceMotion} className="h-5 rounded-none sm:h-6" />
+        </div>
+        <div className="pointer-events-none relative z-10 flex w-full items-end justify-center overflow-visible pb-0">
+          {/* motion `x` only on outer div; inner `translate-y` lowers bus without being overwritten. */}
+          <motion.div
+            className="relative w-[min(48vw,160px)] max-w-[160px]"
+            animate={
+              reduceMotion
+                ? { x: 0 }
+                : { x: ["-44vw", "44vw"] }
+            }
+            transition={
+              reduceMotion
+                ? { duration: 0.2 }
+                : {
+                    x: {
+                      duration: 12,
+                      repeat: Infinity,
+                      ease: "linear",
+                      repeatType: "loop",
+                    },
+                  }
+            }
+          >
+            <div className="translate-y-1.5 sm:translate-y-2">
+              <HeroCruiseSpeedWind active={!reduceMotion} />
+              <div className="relative z-[2]">
+                <TravelHeroBusVisual reduceMotion={reduceMotion} cruise />
+              </div>
+            </div>
+          </motion.div>
+        </div>
       </div>
     </div>
   );

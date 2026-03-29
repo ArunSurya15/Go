@@ -1,7 +1,7 @@
 import json
 
 from rest_framework import serializers
-from .models import Schedule, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
+from .models import Schedule, BoardingPoint, DroppingPoint, Reservation, Booking, Payment, BusRating
 from common.serializers import RouteSerializer, RoutePatternSlimSerializer
 from buses.models import Bus
 from buses.utils import infer_layout_kind
@@ -96,3 +96,30 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = ('id', 'booking', 'gateway_order_id', 'gateway_payment_id', 'status', 'raw_response')
         read_only_fields = ('status', 'raw_response')
+
+
+def _mask_reviewer_username(username: str) -> str:
+    if not username or not str(username).strip():
+        return "Traveller"
+    u = str(username).strip()
+    if len(u) <= 2:
+        return "Traveller"
+    mid = min(max(len(u) - 2, 1), 8)
+    return f"{u[0]}{'*' * mid}{u[-1]}"
+
+
+class PublicBusReviewSerializer(serializers.ModelSerializer):
+    """Passenger-written reviews for a bus (public list; usernames masked)."""
+
+    reviewer_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BusRating
+        fields = ("id", "stars", "comment", "created_at", "reviewer_label")
+        read_only_fields = fields
+
+    def get_reviewer_label(self, obj):
+        user = getattr(obj, "user", None)
+        if user is None:
+            return "Traveller"
+        return _mask_reviewer_username(user.username)

@@ -1,7 +1,13 @@
 "use client";
 
-import { useId, useMemo } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { useCallback, useEffect, useId, useMemo, useRef } from "react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useMotionValueEvent,
+  useReducedMotion,
+} from "framer-motion";
 import { MapPin } from "lucide-react";
 import {
   chainHaversineKm,
@@ -63,6 +69,255 @@ function clamp(n: number, lo: number, hi: number): number {
 function norm2(dx: number, dy: number): { tx: number; ty: number } {
   const len = Math.hypot(dx, dy) || 1;
   return { tx: dx / len, ty: dy / len };
+}
+
+/** Heading in degrees for each sample (bus front faces +x in local space). */
+function computeBusHeadings(pts: [number, number][]): number[] {
+  const n = pts.length;
+  if (n === 0) return [];
+  if (n === 1) return [0];
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    let dx: number;
+    let dy: number;
+    if (i < n - 1) {
+      dx = pts[i + 1][0] - pts[i][0];
+      dy = pts[i + 1][1] - pts[i][1];
+    } else {
+      dx = pts[i][0] - pts[i - 1][0];
+      dy = pts[i][1] - pts[i - 1][1];
+    }
+    if (dx === 0 && dy === 0 && i > 0) {
+      dx = pts[i][0] - pts[i - 1][0];
+      dy = pts[i][1] - pts[i - 1][1];
+    }
+    out.push((Math.atan2(dy, dx) * 180) / Math.PI);
+  }
+  return out;
+}
+
+function pointAlongPolyline(pts: [number, number][], t: number): [number, number] {
+  if (pts.length === 0) return [0, 0];
+  if (pts.length === 1) return pts[0];
+  const n = pts.length;
+  const target = Math.max(0, Math.min(1, t)) * (n - 1);
+  const i = Math.min(Math.floor(target), n - 2);
+  const u = target - i;
+  return [
+    pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u,
+    pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u,
+  ];
+}
+
+function headingAlongPolyline(pts: [number, number][], t: number): number {
+  if (pts.length < 2) return 0;
+  const n = pts.length;
+  const target = Math.max(0, Math.min(1, t)) * (n - 1);
+  const i = Math.min(Math.floor(target), n - 2);
+  const dx = pts[i + 1][0] - pts[i][0];
+  const dy = pts[i + 1][1] - pts[i][1];
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+function RouteWindStreaks({ active }: { active: boolean }) {
+  if (!active) return null;
+  const streaks = [
+    { d: "M 3.4 -0.55 Q 5.2 -0.35 7.1 -0.75", delay: 0 },
+    { d: "M 3.6 0.15 Q 5.5 0.45 7.4 0.05", delay: 0.07 },
+    { d: "M 3.35 0.75 Q 5.4 0.95 7.2 0.55", delay: 0.14 },
+    { d: "M 4 -1.05 Q 6 -0.85 7.8 -1.2", delay: 0.1 },
+  ];
+  return (
+    <g className="text-sky-500/[0.75] dark:text-sky-300/60" aria-hidden>
+      {streaks.map((s, i) => (
+        <motion.path
+          key={i}
+          d={s.d}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={0.2}
+          strokeLinecap="round"
+          initial={false}
+          animate={{ opacity: [0.18, 0.7, 0.18] }}
+          transition={{
+            duration: 0.42 + i * 0.04,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: s.delay,
+          }}
+        />
+      ))}
+    </g>
+  );
+}
+
+function RouteBusWheel({ cx, cy, spin }: { cx: number; cy: number; spin: boolean }) {
+  return (
+    <g transform={`translate(${cx},${cy})`}>
+      <motion.g
+        animate={spin ? { rotate: [0, 360] } : { rotate: 0 }}
+        transition={
+          spin
+            ? { duration: 0.48, repeat: Infinity, ease: "linear" }
+            : { duration: 0 }
+        }
+      >
+        <circle
+          r={0.52}
+          className="fill-slate-800 stroke-slate-500 dark:fill-slate-950 dark:stroke-slate-600"
+          strokeWidth={0.12}
+        />
+        <line
+          x1={-0.34}
+          y1={0}
+          x2={0.34}
+          y2={0}
+          className="stroke-slate-200 dark:stroke-slate-400"
+          strokeWidth={0.1}
+          strokeLinecap="round"
+        />
+        <line
+          x1={0}
+          y1={-0.34}
+          x2={0}
+          y2={0.34}
+          className="stroke-slate-200 dark:stroke-slate-400"
+          strokeWidth={0.1}
+          strokeLinecap="round"
+        />
+      </motion.g>
+    </g>
+  );
+}
+
+/**
+ * Small bus icon: moves along samples, wind behind (+x), wheels spin when moving.
+ */
+function AnimatedRouteBus({
+  samples,
+  reduceMotion,
+  moving,
+  fallbackX,
+  fallbackY,
+}: {
+  samples: [number, number][];
+  reduceMotion: boolean;
+  moving: boolean;
+  fallbackX: number;
+  fallbackY: number;
+}) {
+  const gRef = useRef<SVGGElement>(null);
+  const progress = useMotionValue(0);
+  const samplesRef = useRef(samples);
+  const movingRef = useRef(moving);
+  const reduceMotionRef = useRef(reduceMotion);
+  samplesRef.current = samples;
+  movingRef.current = moving;
+  reduceMotionRef.current = reduceMotion;
+
+  const spinWheels = moving && !reduceMotion && samples.length >= 2;
+  const showWind = spinWheels;
+
+  const applyTransform = useCallback(
+    (t: number) => {
+      const el = gRef.current;
+      if (!el) return;
+      const pts = samplesRef.current;
+      if (pts.length < 2) {
+        if (pts.length === 0) {
+          el.setAttribute("transform", `translate(${fallbackX},${fallbackY}) rotate(0)`);
+        } else {
+          const r = computeBusHeadings(pts)[0] ?? 0;
+          el.setAttribute("transform", `translate(${pts[0][0]},${pts[0][1]}) rotate(${r})`);
+        }
+        return;
+      }
+      const [x, y] = pointAlongPolyline(pts, t);
+      const rot = headingAlongPolyline(pts, t);
+      el.setAttribute("transform", `translate(${x},${y}) rotate(${rot})`);
+    },
+    [fallbackX, fallbackY]
+  );
+
+  useEffect(() => {
+    applyTransform(0);
+  }, [samples, applyTransform]);
+
+  useEffect(() => {
+    if (reduceMotion || !moving || samples.length < 2) {
+      progress.set(0);
+      applyTransform(0);
+      return;
+    }
+    progress.set(0);
+    applyTransform(0);
+    const controls = animate(progress, 1, {
+      duration: 5.5,
+      repeat: Infinity,
+      ease: "linear",
+      repeatDelay: 0.6,
+    });
+    return () => controls.stop();
+  }, [reduceMotion, moving, samples, applyTransform, progress]);
+
+  useMotionValueEvent(progress, "change", (t) => {
+    if (reduceMotionRef.current || !movingRef.current || samplesRef.current.length < 2) return;
+    const el = gRef.current;
+    if (!el) return;
+    const pts = samplesRef.current;
+    const [x, y] = pointAlongPolyline(pts, t);
+    const rot = headingAlongPolyline(pts, t);
+    el.setAttribute("transform", `translate(${x},${y}) rotate(${rot})`);
+  });
+
+  return (
+    <g ref={gRef}>
+      <RouteWindStreaks active={showWind} />
+      <path
+        d="M -3.35 1.32 L -3.35 -0.82 Q -3.35 -1.32 -2.75 -1.32 L 1.95 -1.32 Q 3.05 -1.32 3.35 -0.55 L 3.42 0.82 Q 3.42 1.32 2.85 1.32 L -2.85 1.32 Q -3.42 1.32 -3.35 1.32 Z"
+        className="fill-amber-400 stroke-amber-900/50 dark:fill-amber-300 dark:stroke-amber-200/40"
+        strokeWidth={0.28}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M 1.35 -1.22 L 2.95 -1.05 L 2.88 0.55 L 1.25 0.48 Z"
+        className="fill-sky-200/90 stroke-sky-600/40 dark:fill-sky-400/25 dark:stroke-sky-300/35"
+        strokeWidth={0.1}
+      />
+      <RouteBusWheel cx={-1.55} cy={1.28} spin={spinWheels} />
+      <RouteBusWheel cx={1.38} cy={1.28} spin={spinWheels} />
+    </g>
+  );
+}
+
+/**
+ * Teardrop map pin (source / destination). Local (0,0) is the tip — aligns with the route endpoint.
+ */
+function MapEndpointPin({
+  x,
+  y,
+  variant,
+}: {
+  x: number;
+  y: number;
+  variant: "start" | "end";
+}) {
+  const isStart = variant === "start";
+  const fill = isStart ? "#ef4444" : "#22c55e";
+  const stroke = isStart ? "#991b1b" : "#166534";
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <path
+        d="M0,0 C-1.2,0 -2.15,-0.78 -2.9,-2.4 C-3.9,-4.85 -3.48,-8.15 0,-9.2 C3.48,-8.15 3.9,-4.85 2.9,-2.4 C2.15,-0.78 1.2,0 0,0 Z"
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={0.42}
+        strokeLinejoin="round"
+        paintOrder="stroke fill"
+      />
+      <circle cx={0} cy={-5.25} r={2.05} fill="#ffffff" stroke={stroke} strokeWidth={0.22} />
+    </g>
+  );
 }
 
 type MarkerDraw = MapMarker & {
@@ -376,63 +631,34 @@ export function JourneyRoutePreview({
               transition={{ pathLength: { duration: 1.2, ease: [0.22, 1, 0.36, 1] }, opacity: { duration: 0.4 } }}
             />
 
-            {markerDraw.map((d) => {
-              if (d.role === "via") {
-                return (
-                  <circle
-                    key={d.key}
-                    cx={d.x}
-                    cy={d.y}
-                    r={2.6}
-                    className="fill-sky-500 stroke-white dark:stroke-slate-900"
-                    strokeWidth={0.45}
-                  />
-                );
-              }
-              if (d.role === "start") {
-                return (
-                  <g key={d.key}>
-                    <circle cx={d.x} cy={d.y} r={3.2} className="fill-primary" />
-                    <circle
-                      cx={d.x}
-                      cy={d.y}
-                      r={5}
-                      className="fill-none stroke-primary/40"
-                      strokeWidth={0.6}
-                    />
-                  </g>
-                );
-              }
-              return (
-                <g key={d.key}>
-                  <circle cx={d.x} cy={d.y} r={3.2} className="fill-emerald-600 dark:fill-emerald-400" />
-                  <circle
-                    cx={d.x}
-                    cy={d.y}
-                    r={5}
-                    className="fill-none stroke-emerald-600/40 dark:stroke-emerald-400/40"
-                    strokeWidth={0.6}
-                  />
-                </g>
-              );
-            })}
+            {markerDraw.map((d) =>
+              d.role === "via" ? (
+                <circle
+                  key={d.key}
+                  cx={d.x}
+                  cy={d.y}
+                  r={2.6}
+                  className="fill-sky-500 stroke-white dark:stroke-slate-900"
+                  strokeWidth={0.45}
+                />
+              ) : null
+            )}
 
-            <motion.circle
-              r={2.4}
-              className="fill-amber-400 stroke-amber-900/30 dark:fill-amber-300 dark:stroke-amber-100/40"
-              strokeWidth={0.35}
-              initial={
-                reduceMotion
-                  ? { cx: startM.x, cy: startM.y }
-                  : { cx: geo.samples[0]?.[0], cy: geo.samples[0]?.[1] }
-              }
-              animate={busAnimate || { cx: startM.x, cy: startM.y }}
-              transition={
-                reduceMotion
-                  ? undefined
-                  : { duration: 5.5, repeat: Infinity, ease: "linear", repeatDelay: 0.6 }
-              }
+            <AnimatedRouteBus
+              samples={geo.samples as [number, number][]}
+              reduceMotion={reduceMotion}
+              moving={!!busAnimate}
+              fallbackX={startM.x}
+              fallbackY={startM.y}
             />
+
+            {markerDraw.map((d) =>
+              d.role === "start" ? (
+                <MapEndpointPin key={d.key} x={d.x} y={d.y} variant="start" />
+              ) : d.role === "end" ? (
+                <MapEndpointPin key={d.key} x={d.x} y={d.y} variant="end" />
+              ) : null
+            )}
 
             {markerDraw.map((d) => {
               const halo = {
@@ -463,7 +689,7 @@ export function JourneyRoutePreview({
                     y={d.labelY}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="fill-primary"
+                    className="fill-red-700 dark:fill-red-400"
                     style={{ fontSize: `${d.fontPx}px`, fontWeight: 700, ...halo }}
                   >
                     {d.labelText}
@@ -509,7 +735,7 @@ export function JourneyRoutePreview({
             </div>
             <p className="text-[10px] text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 pt-1">
               <span>
-                <span className="font-semibold text-primary">●</span> from
+                <span className="font-semibold text-red-600 dark:text-red-400">●</span> from
               </span>
               {geo.markerLayout.some((m) => m.role === "via") && (
                 <span>

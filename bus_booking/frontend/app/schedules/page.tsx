@@ -18,7 +18,6 @@ import {
 import {
   Bus,
   MapPin,
-  Star,
   ArrowLeft,
   Calendar,
   Search,
@@ -27,6 +26,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BusRatingReviewsTrigger } from "@/components/bus-rating-reviews-trigger";
 
 function buildSchedulesPath(routeId: string, date: string, from: string, to: string) {
   const q = new URLSearchParams();
@@ -425,32 +425,6 @@ function SchedulesTripHeader({
   );
 }
 
-/** Star badge: green 4–5, yellow 3 up to (not including) 4, red under 3 */
-function ratingBadgeClasses(avg: number) {
-  if (avg >= 4) {
-    /* Solid forest-green pill, white star + figures — matches typical 4★+ bus-app badges */
-    return {
-      wrap: "border-0 bg-green-900 text-white shadow-sm ring-1 ring-green-950/30 dark:bg-emerald-950 dark:ring-emerald-900/50",
-      star: "fill-white text-white",
-      sub: "text-white/90",
-    };
-  }
-  if (avg >= 3) {
-    /* Solid amber/orange pill — same pattern as green: white star + text */
-    return {
-      wrap: "border-0 bg-amber-600 text-white shadow-sm ring-1 ring-amber-800/35 dark:bg-amber-700 dark:ring-amber-900/40",
-      star: "fill-white text-white",
-      sub: "text-white/90",
-    };
-  }
-  /* Solid red pill — same pattern */
-  return {
-    wrap: "border-0 bg-red-700 text-white shadow-sm ring-1 ring-red-900/35 dark:bg-red-900 dark:ring-red-950/50",
-    star: "fill-white text-white",
-    sub: "text-white/90",
-  };
-}
-
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
@@ -460,22 +434,6 @@ function duration(dep: string, arr: string) {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   return `${h}h ${m}m`;
-}
-
-function BusRatingBadge({ avg, count }: { avg: number; count: number }) {
-  const tier = ratingBadgeClasses(avg);
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tabular-nums",
-        tier.wrap
-      )}
-    >
-      <Star className={cn("h-3.5 w-3.5", tier.star)} aria-hidden />
-      {avg.toFixed(1)}
-      <span className={cn("font-normal", tier.sub)}>({count})</span>
-    </span>
-  );
 }
 
 const amenityChipVariants = {
@@ -732,7 +690,8 @@ export default function SchedulesPage() {
                                   {layoutLabel}
                                 </span>
                                 {(s.bus.rating_count ?? 0) > 0 && s.bus.rating_avg != null ? (
-                                  <BusRatingBadge
+                                  <BusRatingReviewsTrigger
+                                    busId={s.bus.id}
                                     avg={Number(s.bus.rating_avg)}
                                     count={s.bus.rating_count ?? 0}
                                   />

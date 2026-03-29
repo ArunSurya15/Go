@@ -44,6 +44,37 @@ export function EgoPremiumBus({ reduceMotion, uid, cruise = false, className }: 
 
       <ellipse cx="350" cy="260" rx="250" ry="15" fill="rgba(0,0,0,0.15)" />
 
+      {cruise && !reduceMotion && (
+        <g aria-hidden>
+          {[
+            { d: "M 72 118 Q 26 132 80 162", delay: 0, w: 5, stroke: "#fafafa" },
+            { d: "M 52 152 Q 8 172 64 205", delay: 0.06, w: 5.5, stroke: "#d4d4d8" },
+            { d: "M 90 178 Q 38 198 98 228", delay: 0.03, w: 4.5, stroke: "#f4f4f5" },
+            { d: "M 40 132 Q 4 152 48 188", delay: 0.1, w: 5, stroke: "#a1a1aa" },
+            { d: "M 68 198 Q 22 218 76 248", delay: 0.08, w: 4, stroke: "#e4e4e7" },
+            { d: "M 28 168 Q 0 188 36 218", delay: 0.14, w: 3.5, stroke: "#71717a" },
+          ].map((s, i) => (
+            <motion.path
+              key={i}
+              d={s.d}
+              fill="none"
+              stroke={s.stroke}
+              className="dark:opacity-95"
+              strokeWidth={s.w}
+              strokeLinecap="round"
+              initial={false}
+              animate={{ opacity: [0.26, 0.9, 0.26] }}
+              transition={{
+                duration: 0.42 + i * 0.03,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: s.delay,
+              }}
+            />
+          ))}
+        </g>
+      )}
+
       <motion.g
         animate={
           reduceMotion
@@ -68,17 +99,10 @@ export function EgoPremiumBus({ reduceMotion, uid, cruise = false, className }: 
         <path d="M100 190 Q260 140 420 190" stroke="#38bdf8" strokeWidth="5" fill="none" />
 
         {[200, 480].map((x, i) => (
-          <motion.g
-            key={i}
-            animate={reduceMotion ? false : { rotate: 360 }}
-            transition={
-              reduceMotion ? undefined : { repeat: Infinity, duration: 1.2, ease: "linear" }
-            }
-            style={{ transformOrigin: `${x}px 235px` }}
-          >
+          <g key={i}>
             <circle cx={x} cy="235" r="30" fill="#111827" />
             <circle cx={x} cy="235" r="15" fill="#9ca3af" />
-          </motion.g>
+          </g>
         ))}
 
         <rect x="560" y="170" width="30" height="14" rx="7" fill="#fef08a" />
