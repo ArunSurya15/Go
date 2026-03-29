@@ -4,8 +4,10 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.db.models import Prefetch
 from rest_framework.views import APIView
 
+from common.models import RoutePatternStop
 from .models import Schedule, ScheduleLocation, BoardingPoint, DroppingPoint, Reservation, Booking, Payment, BusRating
 from .rating_utils import refresh_bus_rating_aggregate
 from .serializers import (
@@ -29,7 +31,16 @@ class ScheduleListView(generics.ListAPIView):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        qs = Schedule.objects.select_related('route', 'bus', 'bus__operator').filter(status='ACTIVE')
+        qs = (
+            Schedule.objects.select_related('route', 'route_pattern', 'bus', 'bus__operator')
+            .prefetch_related(
+                Prefetch(
+                    'route_pattern__stops',
+                    queryset=RoutePatternStop.objects.order_by('order'),
+                )
+            )
+            .filter(status='ACTIVE')
+        )
         route_id = self.request.query_params.get('route_id')
         date = self.request.query_params.get('date')
         if route_id:
@@ -69,7 +80,17 @@ class ScheduleSeatMapView(generics.GenericAPIView):
 
     def get(self, request, pk):
         import json
-        schedule = Schedule.objects.select_related('bus').filter(pk=pk).first()
+        schedule = (
+            Schedule.objects.select_related('bus', 'route_pattern')
+            .prefetch_related(
+                Prefetch(
+                    'route_pattern__stops',
+                    queryset=RoutePatternStop.objects.order_by('order'),
+                )
+            )
+            .filter(pk=pk)
+            .first()
+        )
         if not schedule:
             return Response({'detail': 'Schedule not found'}, status=404)
         if schedule.status != 'ACTIVE':
@@ -101,12 +122,25 @@ class ScheduleSeatMapView(generics.GenericAPIView):
         types = types[:total]
         occupied, seat_gender = get_occupied_and_seat_genders(schedule)
         occupied_details = [{'label': s, 'gender': seat_gender.get(s)} for s in sorted(occupied)]
-        return Response({
+        route_stops = []
+        if schedule.route_pattern_id:
+            for st in schedule.route_pattern.stops.all():
+                route_stops.append({
+                    'order': st.order,
+                    'name': st.name,
+                    'lat': str(st.lat) if st.lat is not None else None,
+                    'lng': str(st.lng) if st.lng is not None else None,
+                })
+        payload = {
             'layout': {'rows': rows, 'cols': cols, 'labels': labels, 'types': types},
             'occupied': list(occupied),
             'occupied_details': occupied_details,
             'fare': str(schedule.fare),
-        })
+            'route_stops': route_stops,
+        }
+        if schedule.route_pattern_id:
+            payload['route_pattern_name'] = schedule.route_pattern.name
+        return Response(payload)
 
 
 class ScheduleTrackView(generics.GenericAPIView):

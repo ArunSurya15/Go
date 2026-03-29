@@ -9,6 +9,7 @@ import {
   routes as routesApi,
   type OperatorBus,
   type Route,
+  type RoutePatternSlim,
   type BoardingPointWrite,
   type DroppingPointWrite,
 } from "@/lib/api";
@@ -46,6 +47,7 @@ export default function AddSchedulePage() {
   });
   const [boardingPoints, setBoardingPoints] = useState<BoardingPointWrite[]>([]);
   const [droppingPoints, setDroppingPoints] = useState<DroppingPointWrite[]>([]);
+  const [routePatterns, setRoutePatterns] = useState<RoutePatternSlim[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +75,34 @@ export default function AddSchedulePage() {
     return () => { cancelled = true; };
   }, [getValidToken, router]);
 
+  const [routePatternId, setRoutePatternId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const rid = parseInt(form.route_id, 10);
+    if (!rid) {
+      setRoutePatterns([]);
+      setRoutePatternId("");
+      return;
+    }
+    (async () => {
+      const token = await getValidToken();
+      if (!token || cancelled) return;
+      try {
+        const list = await operatorApi.routePatterns(token, rid);
+        if (!cancelled) {
+          setRoutePatterns(list);
+          setRoutePatternId("");
+        }
+      } catch {
+        if (!cancelled) setRoutePatterns([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.route_id, getValidToken]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -91,6 +121,9 @@ export default function AddSchedulePage() {
       await operatorApi.createSchedule(token, {
         bus: busId,
         route: routeId,
+        ...(routePatternId
+          ? { route_pattern: parseInt(routePatternId, 10) }
+          : {}),
         departure_dt,
         arrival_dt,
         fare: form.fare.trim(),
@@ -176,7 +209,9 @@ export default function AddSchedulePage() {
                 <select
                   id="route_id"
                   value={form.route_id}
-                  onChange={(e) => setForm((f) => ({ ...f, route_id: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, route_id: e.target.value }))
+                  }
                   required
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -189,6 +224,31 @@ export default function AddSchedulePage() {
                 </select>
               </div>
             </div>
+
+            {form.route_id && (
+              <div className="space-y-2">
+                <Label htmlFor="route_pattern_id">Route path (via stops)</Label>
+                <select
+                  id="route_pattern_id"
+                  value={routePatternId}
+                  onChange={(e) => setRoutePatternId(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Default (no map path)</option>
+                  {routePatterns.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.stops?.length
+                        ? ` — ${p.stops.map((s) => s.name).join(" → ")}`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Patterns are managed in Django admin (per route). Passengers see this path on seat selection when set.
+                </p>
+              </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">

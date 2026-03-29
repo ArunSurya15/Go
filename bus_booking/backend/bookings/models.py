@@ -3,7 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 from buses.models import Bus
-from common.models import Route
+from common.models import Route, RoutePattern
 
 
 class Schedule(models.Model):
@@ -14,6 +14,13 @@ class Schedule(models.Model):
     )
     bus = models.ForeignKey(Bus, on_delete=models.CASCADE, related_name='schedules')
     route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name='schedules')
+    route_pattern = models.ForeignKey(
+        RoutePattern,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='schedules',
+    )
     departure_dt = models.DateTimeField()
     arrival_dt = models.DateTimeField()
     fare = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))

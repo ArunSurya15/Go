@@ -4,7 +4,7 @@ from django.utils import timezone
 from datetime import timedelta, datetime, time
 import json
 
-from common.models import Route
+from common.models import Route, RoutePattern, RoutePatternStop
 from buses.models import Operator, Bus
 from bookings.models import Schedule, BoardingPoint, DroppingPoint
 
@@ -40,6 +40,44 @@ class Command(BaseCommand):
                 defaults={'distance_km': r_data['distance_km']}
             )
             routes[f"{r_data['origin']}_{r_data['destination']}"] = route
+
+        def ensure_pattern(route_obj, name, stops_spec):
+            """stops_spec: list of (name, lat, lng) — lat/lng optional as None."""
+            pat, _ = RoutePattern.objects.get_or_create(route=route_obj, name=name)
+            if pat.stops.count() == 0:
+                for i, row in enumerate(stops_spec):
+                    nm = row[0]
+                    la, ln = (row[1], row[2]) if len(row) > 2 else (None, None)
+                    RoutePatternStop.objects.create(
+                        pattern=pat, order=i, name=nm, lat=la, lng=ln
+                    )
+            return pat
+
+        blr_pdy = routes.get("Bengaluru_Pondicherry")
+        pattern_thindivanam = pattern_villianur = None
+        if blr_pdy:
+            pattern_thindivanam = ensure_pattern(
+                blr_pdy,
+                "Via Thindivanam (NH)",
+                [
+                    ("Bengaluru", "12.971600", "77.594600"),
+                    ("Krishnagiri", "12.518600", "78.213700"),
+                    ("Tiruvannamalai", "12.225300", "79.074700"),
+                    ("Thindivanam", "12.234400", "79.650600"),
+                    ("Pondicherry", "11.941600", "79.808300"),
+                ],
+            )
+            pattern_villianur = ensure_pattern(
+                blr_pdy,
+                "Via Villianur",
+                [
+                    ("Bengaluru", "12.971600", "77.594600"),
+                    ("Krishnagiri", "12.518600", "78.213700"),
+                    ("Tiruvannamalai", "12.225300", "79.074700"),
+                    ("Villianur", "11.920000", "79.758000"),
+                    ("Pondicherry", "11.941600", "79.808300"),
+                ],
+            )
 
         # Create buses with different layouts
         buses_data = [
@@ -96,6 +134,7 @@ class Command(BaseCommand):
             s_demo = Schedule.objects.create(
                 bus=bus_demo,
                 route=route_demo,
+                route_pattern=pattern_thindivanam,
                 departure_dt=demo_departure,
                 arrival_dt=demo_arrival,
                 fare='899.00',
@@ -131,15 +170,26 @@ class Command(BaseCommand):
                     (22, 0, 8, 0, '999.00'),  # 10 PM departure, 8 hour journey
                     (14, 0, 7, 30, '950.00'), # 2 PM departure
                 ]
-                for dep_h, dep_m, dur_h, dur_m, fare in times_fares:
+                for ti, (dep_h, dep_m, dur_h, dur_m, fare) in enumerate(times_fares):
                     dep_dt = timezone.make_aware(datetime.combine(schedule_date, time(dep_h, dep_m)))
                     arr_dt = dep_dt + timedelta(hours=dur_h, minutes=dur_m)
+                    leg_pat = None
+                    if pattern_thindivanam and pattern_villianur:
+                        leg_pat = pattern_thindivanam if ti % 2 == 0 else pattern_villianur
                     s, created = Schedule.objects.get_or_create(
                         bus=bus,
                         route=route,
                         departure_dt=dep_dt,
-                        defaults={'arrival_dt': arr_dt, 'fare': fare, 'status': 'ACTIVE'}
+                        defaults={
+                            'arrival_dt': arr_dt,
+                            'fare': fare,
+                            'status': 'ACTIVE',
+                            'route_pattern': leg_pat,
+                        },
                     )
+                    if leg_pat and not created and s.route_pattern_id is None:
+                        s.route_pattern = leg_pat
+                        s.save(update_fields=['route_pattern'])
                     if created:
                         created_count += 1
                         # Add boarding/dropping points

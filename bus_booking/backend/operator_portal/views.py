@@ -3,9 +3,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.db.models import Prefetch
+
 from buses.models import Bus, Operator
 from bookings.models import Schedule, ScheduleLocation
-from common.models import Route
+from common.models import Route, RoutePattern, RoutePatternStop
+from common.serializers import RoutePatternSerializer
 
 from .permissions import IsOperator
 from .serializers import OperatorBusSerializer, OperatorScheduleSerializer, OperatorProfileSerializer
@@ -56,8 +59,15 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
             return Schedule.objects.none()
         return (
             Schedule.objects.filter(bus__operator=op)
-            .select_related("bus", "route")
-            .prefetch_related("boarding_points", "dropping_points")
+            .select_related("bus", "route", "route_pattern")
+            .prefetch_related(
+                Prefetch(
+                    "route_pattern__stops",
+                    queryset=RoutePatternStop.objects.order_by("order"),
+                ),
+                "boarding_points",
+                "dropping_points",
+            )
             .order_by("-departure_dt")
         )
 
@@ -68,6 +78,25 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(status="PENDING")
+
+
+class OperatorRoutePatternListView(generics.ListAPIView):
+    """List route patterns (with stops) for a route — `?route_id=` required."""
+
+    permission_classes = [IsAuthenticated, IsOperator]
+    serializer_class = RoutePatternSerializer
+
+    def get_queryset(self):
+        route_id = self.request.query_params.get("route_id")
+        if not route_id:
+            return RoutePattern.objects.none()
+        return (
+            RoutePattern.objects.filter(route_id=route_id)
+            .prefetch_related(
+                Prefetch("stops", queryset=RoutePatternStop.objects.order_by("order"))
+            )
+            .order_by("name")
+        )
 
 
 class OperatorProfileView(generics.RetrieveUpdateAPIView):
@@ -94,8 +123,15 @@ class ScheduleDetailView(generics.RetrieveUpdateAPIView):
             return Schedule.objects.none()
         return (
             Schedule.objects.filter(bus__operator=op)
-            .select_related("bus", "route")
-            .prefetch_related("boarding_points", "dropping_points")
+            .select_related("bus", "route", "route_pattern")
+            .prefetch_related(
+                Prefetch(
+                    "route_pattern__stops",
+                    queryset=RoutePatternStop.objects.order_by("order"),
+                ),
+                "boarding_points",
+                "dropping_points",
+            )
         )
 
     def get_serializer_context(self):

@@ -1,7 +1,7 @@
 import json
 from rest_framework import serializers
 from buses.models import Bus, Operator
-from common.models import Route
+from common.models import Route, RoutePattern
 from bookings.models import Schedule, BoardingPoint, DroppingPoint
 from buses.constants import VALID_FEATURE_IDS
 
@@ -156,6 +156,11 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
 
     boarding_points = BoardingPointWriteSerializer(many=True, required=False)
     dropping_points = DroppingPointWriteSerializer(many=True, required=False)
+    route_pattern = serializers.PrimaryKeyRelatedField(
+        queryset=RoutePattern.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Schedule
@@ -163,6 +168,7 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
             "id",
             "bus",
             "route",
+            "route_pattern",
             "departure_dt",
             "arrival_dt",
             "fare",
@@ -185,6 +191,32 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
         if not Route.objects.filter(pk=value.pk).exists():
             raise serializers.ValidationError("Invalid route.")
         return value
+
+    def validate(self, attrs):
+        route = attrs.get("route")
+        if route is None and self.instance is not None:
+            route = self.instance.route
+        if "route_pattern" in attrs:
+            rp = attrs["route_pattern"]
+            if rp is not None and route is not None and rp.route_id != route.id:
+                raise serializers.ValidationError(
+                    {
+                        "route_pattern": "Selected pattern must belong to the same route as the schedule.",
+                    }
+                )
+        elif (
+            self.instance is not None
+            and "route" in attrs
+            and self.instance.route_pattern_id
+        ):
+            new_route = attrs["route"]
+            if self.instance.route_pattern.route_id != new_route.id:
+                raise serializers.ValidationError(
+                    {
+                        "route": "Clear or change route pattern when changing to a different route.",
+                    }
+                )
+        return attrs
 
     def create(self, validated_data):
         boarding_points = validated_data.pop("boarding_points", [])

@@ -15,7 +15,7 @@ from bookings.layout_presets import (
 )
 from bookings.models import BoardingPoint, DroppingPoint, Schedule
 from buses.models import Bus, Operator
-from common.models import Route
+from common.models import Route, RoutePattern, RoutePatternStop
 
 class Command(BaseCommand):
     help = "Seed demo data: user, route, operator, bus, schedules"
@@ -42,6 +42,22 @@ class Command(BaseCommand):
             destination='Pondicherry',
             defaults={'distance_km': 310}
         )
+
+        demo_pattern, _ = RoutePattern.objects.get_or_create(
+            route=route, name="Via Thindivanam (NH)"
+        )
+        if demo_pattern.stops.count() == 0:
+            via_stops = [
+                ("Bengaluru", "12.971600", "77.594600"),
+                ("Krishnagiri", "12.518600", "78.213700"),
+                ("Tiruvannamalai", "12.225300", "79.074700"),
+                ("Thindivanam", "12.234400", "79.650600"),
+                ("Pondicherry", "11.941600", "79.808300"),
+            ]
+            for i, (nm, la, ln) in enumerate(via_stops):
+                RoutePatternStop.objects.create(
+                    pattern=demo_pattern, order=i, name=nm, lat=la, lng=ln
+                )
 
         # Operator and Bus
         op, _ = Operator.objects.get_or_create(
@@ -115,8 +131,16 @@ class Command(BaseCommand):
                     bus=bus,
                     route=route,
                     departure_dt=dep,
-                    defaults={'arrival_dt': arr, 'fare': fare, 'status': 'ACTIVE'}
+                    defaults={
+                        'arrival_dt': arr,
+                        'fare': fare,
+                        'status': 'ACTIVE',
+                        'route_pattern': demo_pattern,
+                    },
                 )
+                if not created and s.route_pattern_id is None:
+                    s.route_pattern = demo_pattern
+                    s.save(update_fields=['route_pattern'])
                 if created:
                     created_count += 1
 

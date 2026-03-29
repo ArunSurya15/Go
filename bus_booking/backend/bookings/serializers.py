@@ -2,7 +2,7 @@ import json
 
 from rest_framework import serializers
 from .models import Schedule, BoardingPoint, DroppingPoint, Reservation, Booking, Payment
-from common.serializers import RouteSerializer
+from common.serializers import RouteSerializer, RoutePatternSlimSerializer
 from buses.models import Bus
 from buses.utils import infer_layout_kind
 
@@ -31,13 +31,14 @@ class BusSlimSerializer(serializers.ModelSerializer):
 
 class ScheduleSerializer(serializers.ModelSerializer):
     route = RouteSerializer(read_only=True)
+    route_pattern = RoutePatternSlimSerializer(read_only=True)
     bus = BusSlimSerializer(read_only=True)
     platform_promo_line = serializers.SerializerMethodField()
 
     class Meta:
         model = Schedule
         fields = (
-            'id', 'route', 'bus', 'departure_dt', 'arrival_dt', 'fare', 'status',
+            'id', 'route', 'route_pattern', 'bus', 'departure_dt', 'arrival_dt', 'fare', 'status',
             'fare_original', 'operator_promo_title', 'platform_promo_title',
             'platform_promo_line',
         )

@@ -182,7 +182,12 @@ export default function SelectSeatsPage() {
             </div>
 
             <aside className="lg:sticky lg:top-4 order-first lg:order-none">
-              <JourneyRoutePreview from={fromLabel} to={toLabel} />
+              <JourneyRoutePreview
+                from={fromLabel}
+                to={toLabel}
+                routeStops={seatMap.route_stops}
+                routePatternName={seatMap.route_pattern_name ?? null}
+              />
             </aside>
           </div>
         )}
