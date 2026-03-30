@@ -476,20 +476,13 @@ function AmenityChips({
         <motion.span
           key={fid}
           variants={amenityChipVariants}
-          whileHover={{
-            y: -2,
-            scale: 1.05,
-            transition: { type: "spring", stiffness: 500, damping: 22 },
-          }}
-          whileTap={{ scale: 0.97 }}
           className={cn(
             "relative inline-flex cursor-default items-center overflow-hidden rounded-full border border-sky-300/70",
             "bg-gradient-to-br from-sky-50 via-white to-cyan-50/90 px-2.5 py-1",
             "text-[10px] font-semibold tracking-tight text-sky-950 shadow-sm",
             "ring-1 ring-sky-200/60 ring-offset-0",
-            "transition-shadow duration-200 hover:border-primary/40 hover:shadow-md hover:ring-primary/25",
             "dark:border-sky-600/60 dark:from-sky-950/80 dark:via-sky-900/50 dark:to-cyan-950/40",
-            "dark:text-sky-50 dark:ring-sky-700/50 dark:hover:border-primary/50"
+            "dark:text-sky-50 dark:ring-sky-700/50"
           )}
         >
           <span className="relative z-10">{featureLabel(fid)}</span>
@@ -651,7 +644,8 @@ export default function SchedulesPage() {
                 No buses found for this date.
               </motion.p>
             ) : (
-              filteredSchedules.map((s, i) => {
+              <div className="flex flex-col gap-4">
+              {filteredSchedules.map((s, i) => {
                 const lk = s.bus.layout_kind || "mixed";
                 const layoutLabel = LAYOUT_KIND_LABELS[lk] ?? lk;
                 const feats = s.bus.features || [];
@@ -661,8 +655,9 @@ export default function SchedulesPage() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.03 }}
+                    className="rounded-xl"
                   >
-                    <Card className="group relative overflow-hidden rounded-xl border border-zinc-200/95 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_16px_-4px_rgba(0,0,0,0.12),0_14px_36px_-8px_rgba(0,0,0,0.14)] ring-1 ring-black/[0.04] transition-[box-shadow,transform,border-color] duration-200 ease-out hover:-translate-y-1 hover:border-zinc-300/90 hover:bg-white hover:shadow-[0_2px_4px_rgba(0,0,0,0.06),0_10px_24px_-4px_rgba(0,0,0,0.16),0_22px_48px_-10px_rgba(0,0,0,0.18)] dark:border-zinc-800 dark:bg-zinc-900/60 dark:ring-white/[0.06] dark:shadow-[0_4px_14px_-2px_rgba(0,0,0,0.5),0_12px_32px_-6px_rgba(0,0,0,0.45)] dark:hover:border-zinc-600 dark:hover:bg-zinc-900/60 dark:hover:shadow-[0_6px_18px_-2px_rgba(0,0,0,0.55),0_16px_40px_-8px_rgba(0,0,0,0.5)]">
+                    <Card className="group relative overflow-hidden rounded-xl border border-zinc-200/95 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_16px_-4px_rgba(0,0,0,0.12),0_14px_36px_-8px_rgba(0,0,0,0.14)] ring-1 ring-black/[0.04] transition-shadow duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-900/60 dark:ring-white/[0.06] dark:shadow-[0_4px_14px_-2px_rgba(0,0,0,0.5),0_12px_32px_-6px_rgba(0,0,0,0.45)] hover:shadow-[0_16px_48px_-10px_rgba(0,0,0,0.2),0_8px_24px_-6px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_20px_56px_-8px_rgba(0,0,0,0.65),0_10px_28px_-6px_rgba(0,0,0,0.45)]">
                       {s.operator_promo_title ? (
                         <div
                           className="absolute right-0 top-0 z-10 max-w-[55%] rounded-bl-lg bg-gradient-to-b from-amber-300 to-amber-500 px-2.5 py-1 text-[10px] font-bold leading-tight text-amber-950 shadow-sm sm:max-w-[45%] sm:text-[11px]"
@@ -757,7 +752,8 @@ export default function SchedulesPage() {
                     </Card>
                   </motion.div>
                 );
-              })
+              })}
+              </div>
             )}
           </AnimatePresence>
         </div>

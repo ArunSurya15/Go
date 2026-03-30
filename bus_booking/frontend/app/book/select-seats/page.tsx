@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -12,7 +12,7 @@ import { booking, routes, type SeatMapResponse } from "@/lib/api";
 
 const FLOW_KEY = "bus_booking_flow";
 
-export default function SelectSeatsPage() {
+function SelectSeatsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token, getValidToken } = useAuth();
@@ -193,5 +193,19 @@ export default function SelectSeatsPage() {
         )}
       </motion.div>
     </div>
+  );
+}
+
+export default function SelectSeatsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-12 text-center text-muted-foreground">
+          Loading booking…
+        </div>
+      }
+    >
+      <SelectSeatsContent />
+    </Suspense>
   );
 }

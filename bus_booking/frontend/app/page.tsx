@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   TravelHeroAmbientScenery,
-  TravelHeroBusCruise,
+  TravelHeroCruiseBus,
+  TravelHeroCruiseGround,
   TravelHeroDriftingCloud,
   TravelHeroHeading,
   TravelHeroScope,
@@ -111,9 +112,10 @@ export default function HomePage() {
                   duration={20}
                   variant={0}
                 />
+                <TravelHeroCruiseGround />
                 <TravelHeroAmbientScenery />
                 <TravelHeroHeading />
-                <TravelHeroBusCruise />
+                <TravelHeroCruiseBus />
               </TravelHeroScope>
             </TravelHeroSection>
           </motion.div>

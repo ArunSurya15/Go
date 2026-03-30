@@ -659,7 +659,7 @@ export function TravelHeroAmbientScenery({ className }: { className?: string }) 
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 bottom-12 z-[1] h-[4.5rem] sm:bottom-14 sm:h-[5.25rem]",
+        "pointer-events-none absolute inset-x-0 bottom-12 z-[4] h-[4.5rem] sm:bottom-14 sm:h-[5.25rem]",
         className
       )}
       aria-hidden
@@ -945,19 +945,97 @@ export function TravelHeroRoadStrip({ className }: { className?: string }) {
   );
 }
 
-/**
- * Cruise strip: road is taller (`h-5` / `sm:h-6`), flush to the track bottom, same width as the hero.
- * Bus row `pb` offsets the bus above the track bottom (`items-end`); smaller `pb` = lower on the road.
- */
-export function TravelHeroBusCruise({ className }: { className?: string }) {
+/** Flat mini landscape above the road — layered hills, simple trees, pale sky (reference-style). */
+function TravelHeroCruiseHillsStrip() {
+  return (
+    <div
+      className={cn("relative w-full overflow-hidden bg-sky-100/85 dark:bg-sky-900/30")}
+      aria-hidden
+    >
+      <svg
+        className="block h-9 w-full sm:h-10"
+        viewBox="0 0 400 48"
+        preserveAspectRatio="none"
+      >
+        <title>Landscape</title>
+        {/* Distant soft hill — kept low in the viewBox so it doesn’t read into the skyline above */}
+        <path
+          d="M0 48 V 30 C 55 24 95 22 150 28 S 260 20 400 26 V 48 Z"
+          className="fill-emerald-200/95 dark:fill-emerald-700/55"
+        />
+        {/* Mid rolling hills */}
+        <path
+          d="M0 48 V 32 C 70 18 110 20 170 30 S 270 22 400 30 V 48 Z"
+          className="fill-emerald-300/95 dark:fill-emerald-600/58"
+        />
+        {/* Foreground hill */}
+        <path
+          d="M0 48 V 38 C 90 28 130 30 200 38 S 310 32 400 40 V 48 Z"
+          className="fill-emerald-400/95 dark:fill-emerald-600/62"
+        />
+        {/* Winding paths — airy greens */}
+        <path
+          d="M 48 46 Q 72 34 96 42"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          className="text-lime-100/95 dark:text-lime-400/50"
+        />
+        <path
+          d="M 288 46 Q 312 36 338 44"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinecap="round"
+          className="text-emerald-100/90 dark:text-emerald-400/45"
+        />
+        {/* Taller trees — lighter trunk + canopy greens */}
+        <g className="fill-emerald-600/80 dark:fill-emerald-500/75">
+          <rect x="71.2" y="24" width="2.4" height="15" rx="0.45" />
+          <rect x="116.8" y="22" width="2.2" height="16" rx="0.4" />
+          <rect x="266.8" y="23" width="2.4" height="15.5" rx="0.45" />
+        </g>
+        <circle cx="72.4" cy="17.5" r="6.8" className="fill-lime-400/95 dark:fill-lime-300/85" />
+        <circle cx="118" cy="14" r="4.2" className="fill-emerald-400/95 dark:fill-emerald-300/82" />
+        <circle cx="114.2" cy="16.2" r="3.6" className="fill-green-400/95 dark:fill-green-300/78" />
+        <circle cx="121.6" cy="16.2" r="3.6" className="fill-emerald-400/95 dark:fill-emerald-300/80" />
+        <ellipse
+          cx="268.2"
+          cy="15"
+          rx="7"
+          ry="6"
+          className="fill-green-400/95 dark:fill-green-300/80"
+        />
+      </svg>
+    </div>
+  );
+}
+
+/** Hills + road only — keep `z-[1]` so `TravelHeroAmbientScenery` (`z-[4]`) paints on top. */
+export function TravelHeroCruiseGround({ className }: { className?: string }) {
   const { reduceMotion } = useTravelHeroScope();
   return (
-    <div className={cn("relative z-10 w-full px-0 pb-2 pt-1 sm:pb-3 sm:pt-2", className)}>
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-2 z-[1] flex flex-col sm:bottom-3",
+        className
+      )}
+      aria-hidden
+    >
+      <TravelHeroCruiseHillsStrip />
+      <RealisticRoad reduceMotion={reduceMotion} className="h-5 shrink-0 rounded-none sm:h-6" />
+    </div>
+  );
+}
+
+/** Moving bus — `z-[8]` so it stays above skyline + heading overlap region. */
+export function TravelHeroCruiseBus({ className }: { className?: string }) {
+  const { reduceMotion } = useTravelHeroScope();
+  return (
+    <div className={cn("relative z-[8] w-full px-0 pb-2 pt-1 sm:pb-3 sm:pt-2", className)}>
       <div className="relative w-full min-h-[5rem] sm:min-h-[5.5rem]">
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0">
-          <RealisticRoad reduceMotion={reduceMotion} className="h-5 rounded-none sm:h-6" />
-        </div>
-        <div className="pointer-events-none relative z-10 flex w-full items-end justify-center overflow-visible pb-0">
+        <div className="pointer-events-none relative flex w-full items-end justify-center overflow-visible pb-0">
           {/* motion `x` only on outer div; inner `translate-y` lowers bus without being overwritten. */}
           <motion.div
             className="relative w-[min(48vw,160px)] max-w-[160px]"
@@ -1022,9 +1100,10 @@ export function ImprovedTravelHero({ className }: { className?: string }) {
           duration={20}
           variant={0}
         />
+        <TravelHeroCruiseGround />
         <TravelHeroAmbientScenery />
         <TravelHeroHeading />
-        <TravelHeroBusCruise />
+        <TravelHeroCruiseBus />
       </TravelHeroScope>
     </TravelHeroSection>
   );
