@@ -59,15 +59,18 @@ class SeatMapField(serializers.Field):
             raise serializers.ValidationError("cols must be a positive integer.")
         if labels is not None and not isinstance(labels, list):
             raise serializers.ValidationError("labels must be a list of strings.")
-        valid_types = {"seater", "sleeper", "semi_sleeper", "aisle"}
+        valid_types = {"seater", "sleeper", "semi_sleeper", "aisle", "blank"}
         if types is not None:
             if not isinstance(types, list):
                 raise serializers.ValidationError("types must be a list of strings.")
             for i, t in enumerate(types):
                 if t is not None and t not in valid_types:
                     raise serializers.ValidationError(
-                        f"types[{i}] must be one of: seater, sleeper, semi_sleeper, aisle."
+                        f"types[{i}] must be one of: seater, sleeper, semi_sleeper, aisle, blank."
                     )
+        has_upper = data.get("has_upper_deck")
+        if has_upper is not None and not isinstance(has_upper, bool):
+            raise serializers.ValidationError("has_upper_deck must be a boolean.")
         orientations = data.get("orientations")
         if orientations is not None:
             if not isinstance(orientations, list):

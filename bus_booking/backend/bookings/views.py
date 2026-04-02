@@ -140,6 +140,11 @@ class ScheduleSeatMapView(generics.GenericAPIView):
                     'lat': str(st.lat) if st.lat is not None else None,
                     'lng': str(st.lng) if st.lng is not None else None,
                 })
+        hud = layout.get('has_upper_deck')
+        if hud is None:
+            has_upper_deck = True
+        else:
+            has_upper_deck = bool(hud)
         payload = {
             'layout': {
                 'rows': rows,
@@ -147,6 +152,7 @@ class ScheduleSeatMapView(generics.GenericAPIView):
                 'labels': labels,
                 'types': types,
                 'orientations': orientations,
+                'has_upper_deck': has_upper_deck,
             },
             'occupied': list(occupied),
             'occupied_details': occupied_details,

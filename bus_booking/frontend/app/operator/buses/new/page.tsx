@@ -16,19 +16,69 @@ import {
   SeaterTopViewIcon,
   SleeperBerthIcon,
   SPACING_CONFIG,
+  buildSeatEditorMatrix,
+  computeGridMetrics,
+  computeSyncedDeckRowGaps,
   type SeatCellType,
   type SeatOrientation,
 } from "@/components/seat-layout";
 
+const COL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+export type LayoutTemplateDef = {
+  id: string;
+  name: string;
+  rows: number;
+  cols: number;
+  description: string;
+  /** Single-deck bus: all rows in one panel when booking. Omit = double deck (split rows). */
+  has_upper_deck?: boolean;
+};
+
 /** Standard layouts: top view — left side = first columns, right side = last columns. */
-export const LAYOUT_TEMPLATES = [
+export const LAYOUT_TEMPLATES: LayoutTemplateDef[] = [
   { id: "standard_2_2", name: "Standard 2+2 (seater)", rows: 9, cols: 4, description: "9 rows × 4 seats (2 left, 2 right)" },
   { id: "standard_2_1", name: "Standard 2+1", rows: 9, cols: 3, description: "9 rows × 3 (2 left, 1 right)" },
-  { id: "sleeper_1_1_1_lower", name: "Sleeper 1+1+1 (lower deck)", rows: 10, cols: 3, description: "10 rows × 3 berths" },
-  { id: "sleeper_1_1_1_upper", name: "Sleeper 1+1+1 (upper deck)", rows: 10, cols: 3, description: "10 rows × 3 berths" },
-  { id: "sleeper_2_1_lower", name: "Sleeper 2+1 (lower deck)", rows: 10, cols: 3, description: "10 rows × 3 (2+1)" },
-  { id: "custom", name: "Custom (visual editor)", rows: 9, cols: 4, description: "Draw your own layout: seater, sleeper, semi-sleeper, aisle" },
-] as const;
+  {
+    id: "sleeper_1_1_1_lower",
+    name: "Sleeper 1+1+1 (single deck)",
+    rows: 10,
+    cols: 3,
+    description: "10 rows × 3 berths — one deck only (no upper section in the seat map).",
+    has_upper_deck: false,
+  },
+  {
+    id: "sleeper_1_1_1_upper",
+    name: "Sleeper 1+1+1 (single deck, upper-style grid)",
+    rows: 10,
+    cols: 3,
+    description: "10 rows × 3 berths — one deck; use for upper-only style numbering if needed.",
+    has_upper_deck: false,
+  },
+  {
+    id: "sleeper_2_1_lower",
+    name: "Sleeper 2+1 (single deck)",
+    rows: 10,
+    cols: 3,
+    description: "10 rows × 3 (2+1) — one deck only.",
+    has_upper_deck: false,
+  },
+  {
+    id: "sleeper_double",
+    name: "Sleeper lower + upper (1+1+1)",
+    rows: 20,
+    cols: 3,
+    description: "20 rows × 3 berths — first half = lower deck, second half = upper deck (double-decker).",
+    has_upper_deck: true,
+  },
+  {
+    id: "custom",
+    name: "Custom (visual editor)",
+    rows: 9,
+    cols: 4,
+    description: "Draw your own layout: seater, sleeper, semi-sleeper, aisle, blank spacer.",
+  },
+];
 
 const SEAT_TYPES: { id: SeatCellType; label: string; color: string; icon?: React.ReactNode }[] = [
   {
@@ -68,6 +118,11 @@ const SEAT_TYPES: { id: SeatCellType; label: string; color: string; icon?: React
     ),
   },
   { id: "aisle", label: "Aisle (pathway)", color: "bg-slate-100 border-dashed border-slate-400" },
+  {
+    id: "blank",
+    label: "Blank spacer",
+    color: "bg-zinc-50 border-zinc-300 border-dotted",
+  },
 ];
 
 function generateSeatLabels(rows: number, cols: number, types: SeatCellType[]): string[] {
@@ -77,7 +132,7 @@ function generateSeatLabels(rows: number, cols: number, types: SeatCellType[]): 
     let colLetterIndex = 0;
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
-      if (types[idx] === "aisle") {
+      if (types[idx] === "aisle" || types[idx] === "blank") {
         labels.push("");
       } else {
         labels.push(`${r + 1}${letters[colLetterIndex] ?? colLetterIndex + 1}`);
@@ -88,10 +143,17 @@ function generateSeatLabels(rows: number, cols: number, types: SeatCellType[]): 
   return labels;
 }
 
+const SLEEPER_TEMPLATE_IDS = new Set<string>([
+  "sleeper_1_1_1_lower",
+  "sleeper_1_1_1_upper",
+  "sleeper_2_1_lower",
+  "sleeper_double",
+]);
+
 function buildTypesFromTemplate(templateId: string, rows: number, cols: number): SeatCellType[] {
   const total = rows * cols;
   const types: SeatCellType[] = Array(total).fill("seater");
-  if (templateId === "sleeper_1_1_1_lower" || templateId === "sleeper_1_1_1_upper" || templateId === "sleeper_2_1_lower") {
+  if (SLEEPER_TEMPLATE_IDS.has(templateId)) {
     for (let i = 0; i < total; i++) types[i] = "sleeper";
   }
   return types;
@@ -116,8 +178,10 @@ export default function AddBusPage() {
   const [cellOrientations, setCellOrientations] = useState<SeatOrientation[]>(() =>
     Array(9 * 4).fill("portrait")
   );
-  /** When painting seats: portrait = default; landscape = berth or bench runs along the row (wide block). */
+  /** When painting seats: false = portrait (vertical berth / normal seat); true = landscape (horizontal along the row). */
   const [alongRowBlock, setAlongRowBlock] = useState(false);
+  /** Double-decker: split rows into lower + upper in the passenger seat map. Off = single “Seat layout” panel. */
+  const [hasUpperDeck, setHasUpperDeck] = useState(true);
   const [featureCatalog, setFeatureCatalog] = useState<BusFeatureDef[]>(BUS_FEATURES_FALLBACK);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [extrasNote, setExtrasNote] = useState("");
@@ -159,10 +223,12 @@ export default function AddBusPage() {
   const totalCells = form.rows * form.cols;
   const capacityFromLayout = useMemo(() => {
     if (form.layout_template === "custom") {
-      return cellTypes.slice(0, totalCells).filter((t) => t !== "aisle").length;
+      return cellTypes.slice(0, totalCells).filter((t) => t !== "aisle" && t !== "blank").length;
     }
     return totalCells;
   }, [form.layout_template, form.rows, form.cols, cellTypes, totalCells]);
+
+  const deckSplitRow = useMemo(() => Math.ceil(form.rows / 2), [form.rows]);
 
   const applyTemplate = (templateId: string) => {
     const t = LAYOUT_TEMPLATES.find((x) => x.id === templateId);
@@ -187,6 +253,7 @@ export default function AddBusPage() {
         for (let i = 0; i < Math.min(prev.length, next.length); i++) next[i] = prev[i];
         return next;
       });
+      setHasUpperDeck(t.has_upper_deck !== undefined ? t.has_upper_deck : true);
     }
   };
 
@@ -226,6 +293,35 @@ export default function AddBusPage() {
     });
   };
 
+  const fillColumnWithSelection = (col: number) => {
+    if (form.layout_template !== "custom") return;
+    const { rows, cols } = form;
+    setCellTypes((prev) => {
+      const next = [...prev];
+      for (let r = 0; r < rows; r++) {
+        const i = r * cols + col;
+        next[i] = selectedType;
+      }
+      return next;
+    });
+    setCellOrientations((prev) => {
+      const next = [...prev];
+      for (let r = 0; r < rows; r++) {
+        const i = r * cols + col;
+        if (
+          selectedType === "sleeper" ||
+          selectedType === "seater" ||
+          selectedType === "semi_sleeper"
+        ) {
+          next[i] = alongRowBlock ? "landscape" : "portrait";
+        } else {
+          next[i] = "portrait";
+        }
+      }
+      return next;
+    });
+  };
+
   const showVisualEditor = form.layout_template === "custom";
 
   const editorPreviewLabels = useMemo(
@@ -233,6 +329,34 @@ export default function AddBusPage() {
       showVisualEditor ? generateSeatLabels(form.rows, form.cols, cellTypes) : [],
     [showVisualEditor, form.rows, form.cols, cellTypes]
   );
+
+  const editorFullMatrix = useMemo(() => {
+    if (!showVisualEditor) return null;
+    return buildSeatEditorMatrix(
+      form.rows,
+      form.cols,
+      editorPreviewLabels,
+      cellTypes,
+      cellOrientations
+    );
+  }, [showVisualEditor, form.rows, form.cols, editorPreviewLabels, cellTypes, cellOrientations]);
+
+  const editorLayoutMetrics = useMemo(() => {
+    if (!editorFullMatrix) return null;
+    const { colW, rowH } = computeGridMetrics(editorFullMatrix);
+    const lower = editorFullMatrix.slice(0, deckSplitRow);
+    const upper = editorFullMatrix.slice(deckSplitRow);
+    const gaps =
+      hasUpperDeck && upper.length > 0
+        ? computeSyncedDeckRowGaps(lower, upper)
+        : {
+            lowerRowGapPx: SPACING_CONFIG.ROW_GAP,
+            upperRowGapPx: SPACING_CONFIG.ROW_GAP,
+            lowerGridPadY: 0,
+            upperGridPadY: 0,
+          };
+    return { colW, rowH, gaps };
+  }, [editorFullMatrix, hasUpperDeck, deckSplitRow]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,7 +399,7 @@ export default function AddBusPage() {
       await operatorApi.createBus(token, {
         registration_no: form.registration_no.trim(),
         capacity,
-        seat_map: { rows, cols, labels, types, orientations },
+        seat_map: { rows, cols, labels, types, orientations, has_upper_deck: hasUpperDeck },
         features: selectedFeatures,
         extras_note: extrasNote.trim(),
         ...(form.service_name.trim() ? { service_name: form.service_name.trim() } : {}),
@@ -308,7 +432,8 @@ export default function AddBusPage() {
         <CardHeader>
           <CardTitle>Add bus</CardTitle>
           <CardDescription>
-            Choose a template or use the visual editor to set each cell as seater, sleeper, semi-sleeper, or aisle (pathway).
+            Pick a template or draw a custom grid. Sleeper templates include a true double-decker (lower + upper) option.
+            In the editor, set horizontal vs vertical seats and use blank spacers or aisles where you need gaps.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -451,9 +576,11 @@ export default function AddBusPage() {
               <div className="rounded-lg border bg-slate-50/50 p-4 space-y-4">
                 <p className="text-sm font-medium">Visual layout editor</p>
                 <p className="text-xs text-slate-500">
-                  Select a type below, then click a cell to set it. Aisle = pathway (no seat). Seat names are auto-generated.
+                  Select a type below, then click a cell. <strong>Aisle</strong> = walkable passage (dashed).{" "}
+                  <strong>Blank</strong> = empty spacer (not a seat, not a walkway). Seat labels are generated automatically.
+                  Seaters are green-tinted, semi-sleepers orange, sleepers blue — matching the passenger map.
                 </p>
-                <div className="flex flex-col lg:flex-row gap-6">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label className="text-xs">Seat type (click to select)</Label>
                     <div className="flex flex-wrap gap-2">
@@ -475,35 +602,162 @@ export default function AddBusPage() {
                       Selected:{" "}
                       <strong>{SEAT_TYPES.find((t) => t.id === selectedType)?.label}</strong>
                     </p>
-                    {selectedType !== "aisle" ? (
-                      <label className="mt-2 flex cursor-pointer items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={alongRowBlock}
-                          onChange={(e) => setAlongRowBlock(e.target.checked)}
-                          className="rounded border-slate-400"
-                        />
-                        <span>
-                          Along-row layout (wide block — horizontal sleeper or front bench seats)
-                        </span>
-                      </label>
-                    ) : null}
-                    <p className="text-sm font-medium mt-2">Seats: {capacityFromLayout}</p>
-                  </div>
-                  <div className="flex-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-zinc-950/50">
-                    <p className="mb-2 text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                      Preview matches passenger seat map (spacing + icons). Lower deck = first half of
-                      rows, upper = second half.
+                    <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                      <span className="text-[11px] text-slate-500">Fill column:</span>
+                      {Array.from({ length: form.cols }, (_, c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => fillColumnWithSelection(c)}
+                          className="h-7 min-w-7 rounded border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 shadow-sm hover:border-primary hover:bg-primary/5 dark:border-slate-600 dark:bg-zinc-900 dark:text-slate-200"
+                          title={`Set column ${COL_LETTERS[c] ?? c + 1} to ${SEAT_TYPES.find((t) => t.id === selectedType)?.label ?? selectedType}`}
+                        >
+                          {COL_LETTERS[c] ?? c + 1}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] leading-snug text-slate-500 pt-1">
+                      <strong>Drag to paint:</strong> hold the mouse button and move across cells (best for long aisles).
+                      Use <strong>Fill column</strong> for a full vertical aisle in one click.
                     </p>
-                    <OperatorSeatEditorGrid
-                      rows={form.rows}
-                      cols={form.cols}
-                      labels={editorPreviewLabels}
-                      cellTypes={cellTypes}
-                      cellOrientations={cellOrientations}
-                      onPaintCell={setCellType}
-                    />
-                    <p className="text-xs text-slate-500 mt-3">Front of bus at top of grid →</p>
+                    {selectedType !== "aisle" && selectedType !== "blank" ? (
+                      <fieldset className="mt-3 space-y-2 border-0 p-0">
+                        <legend className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                          Seat / berth direction (how it faces in the grid)
+                        </legend>
+                        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                          <input
+                            type="radio"
+                            name="paint-orientation"
+                            checked={!alongRowBlock}
+                            onChange={() => setAlongRowBlock(false)}
+                            className="border-slate-400"
+                          />
+                          <span>
+                            <strong>Vertical</strong> — default (chair upright; sleeper head-to-toe along the bus length)
+                          </span>
+                        </label>
+                        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                          <input
+                            type="radio"
+                            name="paint-orientation"
+                            checked={alongRowBlock}
+                            onChange={() => setAlongRowBlock(true)}
+                            className="border-slate-400"
+                          />
+                          <span>
+                            <strong>Horizontal</strong> — wide block along the row (berth lying across the bus, or front
+                            bench seats). The preview updates to show wide cells when a cell was painted in this mode.
+                          </span>
+                        </label>
+                        <p className="text-[11px] leading-snug text-slate-500 pl-6">
+                          Tip: choose <strong>Horizontal</strong> before painting cells to draw sleepers or benches that
+                          span sideways in the layout.
+                        </p>
+                      </fieldset>
+                    ) : null}
+                    <p className="text-sm font-medium pt-1">Seats: {capacityFromLayout}</p>
+                    <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-zinc-900/40 dark:text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={!hasUpperDeck}
+                        onChange={(e) => setHasUpperDeck(!e.target.checked)}
+                        className="mt-0.5 rounded border-slate-400"
+                      />
+                      <span>
+                        <span className="font-medium">Remove upper berth</span>
+                        <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                          When checked, passengers see a single deck. When unchecked, the first half of rows is{" "}
+                          <strong>Lower</strong> and the second half <strong>Upper</strong> (preview below).
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="w-full overflow-x-auto rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-zinc-950/50">
+                    <p className="mb-3 text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                      Layout preview (front of bus at the top of each grid)
+                    </p>
+                    {hasUpperDeck ? (
+                      <div
+                        className="flex flex-col items-stretch sm:flex-row sm:justify-center"
+                        style={{ gap: `${SPACING_CONFIG.DECK_GAP}px` }}
+                      >
+                        <div className="flex min-w-0 flex-col items-center sm:items-stretch">
+                          <p className="mb-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 sm:text-left">
+                            Lower
+                          </p>
+                          <div className="flex justify-center sm:justify-start">
+                            <OperatorSeatEditorGrid
+                              rows={form.rows}
+                              cols={form.cols}
+                              labels={editorPreviewLabels}
+                              cellTypes={cellTypes}
+                              cellOrientations={cellOrientations}
+                              onPaintCell={setCellType}
+                              rowSlice={{ start: 0, end: deckSplitRow }}
+                              globalMetrics={
+                                editorLayoutMetrics
+                                  ? {
+                                      colW: editorLayoutMetrics.colW,
+                                      rowH: editorLayoutMetrics.rowH,
+                                      rowGapPx: editorLayoutMetrics.gaps.lowerRowGapPx,
+                                      gridPadY: editorLayoutMetrics.gaps.lowerGridPadY,
+                                    }
+                                  : undefined
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="flex min-w-0 flex-col items-center sm:items-stretch">
+                          <p className="mb-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 sm:text-left">
+                            Upper
+                          </p>
+                          <div className="flex justify-center sm:justify-start">
+                            <OperatorSeatEditorGrid
+                              rows={form.rows}
+                              cols={form.cols}
+                              labels={editorPreviewLabels}
+                              cellTypes={cellTypes}
+                              cellOrientations={cellOrientations}
+                              onPaintCell={setCellType}
+                              rowSlice={{ start: deckSplitRow, end: form.rows }}
+                              globalMetrics={
+                                editorLayoutMetrics
+                                  ? {
+                                      colW: editorLayoutMetrics.colW,
+                                      rowH: editorLayoutMetrics.rowH,
+                                      rowGapPx: editorLayoutMetrics.gaps.upperRowGapPx,
+                                      gridPadY: editorLayoutMetrics.gaps.upperGridPadY,
+                                    }
+                                  : undefined
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-center">
+                        <OperatorSeatEditorGrid
+                          rows={form.rows}
+                          cols={form.cols}
+                          labels={editorPreviewLabels}
+                          cellTypes={cellTypes}
+                          cellOrientations={cellOrientations}
+                          onPaintCell={setCellType}
+                          globalMetrics={
+                            editorLayoutMetrics
+                              ? {
+                                  colW: editorLayoutMetrics.colW,
+                                  rowH: editorLayoutMetrics.rowH,
+                                  rowGapPx: SPACING_CONFIG.ROW_GAP,
+                                  gridPadY: 0,
+                                }
+                              : undefined
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
