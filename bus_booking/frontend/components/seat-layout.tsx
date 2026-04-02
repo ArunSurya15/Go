@@ -1,9 +1,16 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { cn } from "@/lib/utils";
 
 type SeatLayoutProps = {
-  layout: { rows: number; cols: number; labels: string[]; types?: string[] };
+  layout: {
+    rows: number;
+    cols: number;
+    labels: string[];
+    types?: string[];
+    orientations?: string[];
+  };
   occupied: string[];
   occupiedDetails?: { label: string; gender?: "M" | "F" | string }[];
   fare: string;
@@ -47,13 +54,14 @@ export function computeFemaleOnlySeatLabels(
 type CellType = "seater" | "sleeper" | "semi_sleeper" | "aisle" | "";
 /** Alias for operator UI and templates */
 export type SeatCellType = CellType;
-type CellInfo = { label: string; type: CellType };
+export type SeatOrientation = "portrait" | "landscape";
+type CellInfo = { label: string; type: CellType; orientation?: SeatOrientation };
 
 // ============================================================================
 // CONFIGURABLE SPACING VARIABLES
 // ============================================================================
 
-const SPACING_CONFIG = {
+export const SPACING_CONFIG = {
   // Seat icon dimensions
   SEATER_ICON_PX: 36,
   SLEEPER_ICON_HEIGHT_PX: 60,  // Increased from 108 to make it taller
@@ -82,6 +90,93 @@ const SPACING_CONFIG = {
   DECK_PADDING: 12,
   DECK_GAP: 16,                 // Gap between lower and upper deck
 };
+
+const LABEL_LINE_HEIGHT_PX = 14;
+
+function sleeperNarrowWidthPx(): number {
+  return Math.round(
+    SPACING_CONFIG.SLEEPER_ICON_HEIGHT_PX * SPACING_CONFIG.SLEEPER_ICON_ASPECT
+  );
+}
+
+/** Icon box (before padding/price row) for grid sizing — mixed seater/sleeper rows align per column/row max. */
+function getIconBoxDims(type: CellType, orientation: SeatOrientation): { iw: number; ih: number } {
+  const s = SPACING_CONFIG.SEATER_ICON_PX;
+  const sh = SPACING_CONFIG.SLEEPER_ICON_HEIGHT_PX;
+  const sw = sleeperNarrowWidthPx();
+  if (type === "sleeper") {
+    if (orientation === "landscape") return { iw: sh, ih: sw };
+    return { iw: sw, ih: sh };
+  }
+  if (type === "semi_sleeper") {
+    if (orientation === "landscape") {
+      const w = Math.round(s * 2.15);
+      const h = Math.round(s * 0.92);
+      return { iw: w, ih: h };
+    }
+    return { iw: s, ih: s };
+  }
+  if (type === "seater" || !type) {
+    if (orientation === "landscape") {
+      const w = Math.round(s * 2.15);
+      const h = Math.round(s * 0.92);
+      return { iw: w, ih: h };
+    }
+    return { iw: s, ih: s };
+  }
+  return { iw: s, ih: s };
+}
+
+function getCellOuterDims(type: CellType, orientation: SeatOrientation): { ow: number; oh: number } {
+  const { iw, ih } = getIconBoxDims(type, orientation);
+  const oh =
+    ih +
+    SPACING_CONFIG.ICON_TO_PRICE_GAP +
+    LABEL_LINE_HEIGHT_PX +
+    SPACING_CONFIG.SEAT_VERTICAL_PADDING * 2;
+  const ow = iw + SPACING_CONFIG.SEAT_HORIZONTAL_PADDING * 2;
+  return { ow, oh };
+}
+
+function defaultRowMinHeight(): number {
+  return getCellOuterDims("seater", "portrait").oh;
+}
+
+/**
+ * Per-column width and per-row height so sleepers reserve vertical space and seaters align in mixed decks.
+ */
+export function computeGridMetrics(rows: CellInfo[][]): { colW: number[]; rowH: number[] } {
+  const R = rows.length;
+  const C = rows[0]?.length ?? 0;
+  const colW = Array(C).fill(0);
+  const rowH = Array(R).fill(0);
+  for (let r = 0; r < R; r++) {
+    for (let c = 0; c < C; c++) {
+      const cell = rows[r][c];
+      if (!cell?.label) {
+        colW[c] = Math.max(colW[c], SPACING_CONFIG.AISLE_WIDTH);
+        continue;
+      }
+      const ori: SeatOrientation = cell.orientation === "landscape" ? "landscape" : "portrait";
+      const t = (cell.type ?? "seater") as CellType;
+      const { ow, oh } = getCellOuterDims(t, ori);
+      colW[c] = Math.max(colW[c], ow);
+      rowH[r] = Math.max(rowH[r], oh);
+    }
+  }
+  const minR = defaultRowMinHeight();
+  for (let r = 0; r < R; r++) {
+    if (rowH[r] < minR) rowH[r] = minR;
+  }
+  return { colW, rowH };
+}
+
+function gridBodyHeightPx(rowH: number[], rowGapPx: number, topSpacerPx: number): number {
+  if (rowH.length === 0) return topSpacerPx;
+  const sum = rowH.reduce((a, h) => a + h, 0);
+  const between = Math.max(0, rowH.length - 1) * rowGapPx;
+  return topSpacerPx + sum + between;
+}
 
 /**
  * Seater Top View Icon - compact chair outline
@@ -162,9 +257,9 @@ export const SeaterTopViewIcon = ({
 };
 
 /**
- * Sleeper Icon - tall rounded berth
+ * Sleeper Icon - tall rounded berth (passenger + operator preview)
  */
-const SleeperIcon = ({
+export const SleeperBerthIcon = ({
   className,
   style,
   strokeWidth = 0.1,
@@ -270,24 +365,28 @@ function splitDecks(
   rows: number,
   cols: number,
   labels: string[],
-  types?: string[]
+  types?: string[],
+  orientations?: string[]
 ): { lower: CellInfo[][]; upper: CellInfo[][] } {
   const half = Math.ceil(rows / 2);
   const lower: CellInfo[][] = [];
   const upper: CellInfo[][] = [];
-  
+
   for (let r = 0; r < rows; r++) {
     const rowCells: CellInfo[] = [];
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
       const label = labels[idx] ?? "";
       const type = (types?.[idx] as CellType) ?? (label ? "seater" : "aisle");
-      rowCells.push({ label, type });
+      const raw = orientations?.[idx];
+      const orientation: SeatOrientation =
+        String(raw).toLowerCase() === "landscape" ? "landscape" : "portrait";
+      rowCells.push({ label, type, orientation });
     }
     if (r < half) lower.push(rowCells);
     else upper.push(rowCells);
   }
-  
+
   return { lower, upper };
 }
 
@@ -305,6 +404,7 @@ function DeckGrid({
   onFemaleOnlySeatClick,
   topSpacerRow,
   deckType = "lower",
+  rowGapPx,
 }: {
   rows: CellInfo[][];
   occupiedSet: Set<string>;
@@ -317,61 +417,62 @@ function DeckGrid({
   /** When true, add an empty first row so seat rows align between lower and upper deck */
   topSpacerRow?: boolean;
   deckType?: "lower" | "upper";
+  /** Override vertical gap between rows (e.g. sync seater deck height to sleeper deck) */
+  rowGapPx?: number;
 }) {
   const cols = rows[0]?.length ?? 0;
   const numRows = rows.length;
-  
+
   if (cols === 0 || numRows === 0) return null;
-  
+
   const spacerHeight = SPACING_CONFIG.STEERING_ROW_HEIGHT;
   const hasTopRow = !!topSpacerRow && spacerHeight > 0;
-  
+
   const fareInt = Math.round(Number(fare)) || 0;
-  const isSleeperDeck = rows.every((row) => 
-    row.every((c) => !c?.label || (c.type ?? "seater") === "sleeper")
-  );
-  
-  // Calculate dimensions - just the icon size, no extra padding in column width
-  const sleeperW = Math.round(
-    SPACING_CONFIG.SLEEPER_ICON_HEIGHT_PX * SPACING_CONFIG.SLEEPER_ICON_ASPECT
-  );
-  
-  const seatIconWidth = isSleeperDeck ? sleeperW : SPACING_CONFIG.SEATER_ICON_PX;
-  const aisleWidthPx = SPACING_CONFIG.AISLE_WIDTH;
-  
+  const { colW, rowH } = computeGridMetrics(rows);
+  const gapY = rowGapPx ?? SPACING_CONFIG.ROW_GAP;
+
+  const colTemplate = colW.map((w) => `${w}px`).join(" ");
+  const rowTemplate = hasTopRow
+    ? `${spacerHeight}px ${rowH.map((h) => `${h}px`).join(" ")}`
+    : rowH.map((h) => `${h}px`).join(" ");
+
   return (
     <div
-      className="inline-grid items-start"
+      className="inline-grid items-stretch justify-items-center"
       style={{
-        gridTemplateColumns: `repeat(${cols}, min-content)`,
-        gridTemplateRows: hasTopRow
-          ? `${spacerHeight}px repeat(${numRows}, min-content)`
-          : `repeat(${numRows}, min-content)`,
+        gridTemplateColumns: colTemplate,
+        gridTemplateRows: rowTemplate,
         columnGap: `${SPACING_CONFIG.COLUMN_GAP}px`,
-        rowGap: `${SPACING_CONFIG.ROW_GAP}px`,
+        rowGap: `${gapY}px`,
       }}
     >
-      {/* First row: empty spacer so lower/upper deck seat rows align */}
-      {hasTopRow && Array.from({ length: cols }, (_, c) => (
-        <div key={`top-spacer-${c}`} aria-hidden />
-      ))}
-      
+      {hasTopRow &&
+        Array.from({ length: cols }, (_, c) => (
+          <div
+            key={`top-spacer-${c}`}
+            style={{ width: colW[c], height: spacerHeight }}
+            aria-hidden
+          />
+        ))}
+
       {rows.map((row, r) =>
         row.map((cell, c) => {
-          // Aisle cell
           if (!cell?.label) {
             return (
-              <div 
-                key={`aisle-${r}-${c}`} 
-                style={{ width: aisleWidthPx }} 
-                aria-hidden 
+              <div
+                key={`aisle-${r}-${c}`}
+                style={{ width: colW[c], height: rowH[r] }}
+                className="bg-muted/10 rounded-sm"
+                aria-hidden
               />
             );
           }
-          
-          // Seat cell
+
           const label = cell.label;
           const type = cell.type ?? "seater";
+          const orientation: SeatOrientation =
+            cell.orientation === "landscape" ? "landscape" : "portrait";
           const isOccupied = occupiedSet.has(label);
           const isSelected = selectedSet.has(label);
           const isAvailable = !isOccupied;
@@ -379,11 +480,7 @@ function DeckGrid({
           const isFemaleOnly = isAvailable && femaleOnlySet.has(label);
           const femaleOnlyHighlight = isFemaleOnly && !isSelected;
           const gender = genderMap.get(label);
-          /** Booked female = pink; booked male or unknown gender (legacy / no passenger JSON) = blue */
           const occupiedFemale = isOccupied && gender === "F";
-          const occupiedMaleOrUnknown = isOccupied && !occupiedFemale;
-          
-          // Color palette
           const palette = (() => {
             if (isOccupied) {
               if (occupiedFemale) return { icon: "text-pink-200", fill: 0.5 };
@@ -393,8 +490,9 @@ function DeckGrid({
             if (femaleOnlyHighlight) return { icon: "text-pink-600", fill: 0 };
             return { icon: "text-green-700", fill: 0 };
           })();
-          
+
           const isSleeper = type === "sleeper";
+          const { iw, ih } = getIconBoxDims(type, orientation);
 
           const seatButton = (
             <button
@@ -408,31 +506,34 @@ function DeckGrid({
                 onSelect(label);
               }}
               title={isFemaleOnly ? "Female only" : undefined}
-              className={`
-                flex flex-col items-center justify-start
-                transition-colors text-xs font-medium
-                w-full h-full
-                ${isOccupied ? (occupiedFemale ? "text-pink-300 cursor-not-allowed" : "text-blue-300 cursor-not-allowed") : "text-green-800"}
-              `}
-              style={{ 
-                minWidth: seatIconWidth + SPACING_CONFIG.SEAT_HORIZONTAL_PADDING * 2,
+              className={cn(
+                "flex flex-col items-center justify-center transition-colors text-xs font-medium w-full",
+                isOccupied
+                  ? occupiedFemale
+                    ? "text-pink-300 cursor-not-allowed"
+                    : "text-blue-300 cursor-not-allowed"
+                  : "text-green-800"
+              )}
+              style={{
+                width: colW[c],
+                height: rowH[r],
                 gap: `${SPACING_CONFIG.ICON_TO_PRICE_GAP}px`,
                 padding: `${SPACING_CONFIG.SEAT_VERTICAL_PADDING}px ${SPACING_CONFIG.SEAT_HORIZONTAL_PADDING}px`,
                 margin: 0,
-                border: 'none',
-                background: 'transparent',
+                border: "none",
+                background: "transparent",
+                boxSizing: "border-box",
               }}
             >
-              {/* Seat icon */}
-              <div className="flex items-center justify-center shrink-0 leading-[0] [&>*]:block" style={{ display: 'block' }}>
+              <div className="flex flex-1 flex-col items-center justify-center leading-[0] min-h-0 [&>*]:block">
                 <div className={palette.icon}>
                   {isSleeper ? (
-                    <SleeperIcon
+                    <SleeperBerthIcon
                       className="shrink-0 block"
-                      style={{ 
-                        width: seatIconWidth, 
-                        height: SPACING_CONFIG.SLEEPER_ICON_HEIGHT_PX,
-                        display: 'block',
+                      style={{
+                        width: iw,
+                        height: ih,
+                        display: "block",
                       }}
                       strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
                       fillOpacity={palette.fill ?? 0}
@@ -441,9 +542,9 @@ function DeckGrid({
                     <SeaterTopViewIcon
                       className="shrink-0 block"
                       style={{
-                        width: seatIconWidth,
-                        height: seatIconWidth,
-                        display: 'block',
+                        width: iw,
+                        height: ih,
+                        display: "block",
                       }}
                       fillOpacity={palette.fill}
                       strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
@@ -451,21 +552,18 @@ function DeckGrid({
                   )}
                 </div>
               </div>
-              
-              {/* Status/Price label */}
               {isOccupied && (
                 <span
-                  className={`text-[10px] leading-none block ${occupiedFemale ? "text-pink-400" : "text-blue-400"}`}
-                  style={{ margin: 0 }}
+                  className={cn(
+                    "text-[10px] leading-none shrink-0",
+                    occupiedFemale ? "text-pink-400" : "text-blue-400"
+                  )}
                 >
                   Sold
                 </span>
               )}
               {isAvailable && (
-                <span
-                  className="text-[10px] leading-none block text-gray-500 dark:text-gray-400"
-                  style={{ margin: 0 }}
-                >
+                <span className="text-[10px] leading-none shrink-0 text-gray-500 dark:text-gray-400">
                   ₹{fareInt}
                 </span>
               )}
@@ -477,8 +575,8 @@ function DeckGrid({
               <div
                 key={label}
                 className="relative flex flex-col items-center justify-start group"
+                style={{ width: colW[c], height: rowH[r] }}
               >
-                {/* Dark popover (hover / keyboard focus) */}
                 <div
                   className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 w-max min-w-[5.5rem] -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
                   role="tooltip"
@@ -521,7 +619,7 @@ function SeatTypesLegend() {
         fillOpacity={0}
         strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
       />
-      <SleeperIcon
+      <SleeperBerthIcon
         className={`${LEGEND_SLEEPER} shrink-0 block`}
         strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
         fillOpacity={0}
@@ -536,7 +634,7 @@ function SeatTypesLegend() {
         fillOpacity={0.5}
         strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
       />
-      <SleeperIcon
+      <SleeperBerthIcon
         className={`${LEGEND_SLEEPER} shrink-0 block`}
         strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
         fillOpacity={0.5}
@@ -576,7 +674,7 @@ function SeatTypesLegend() {
             </div>
             <div className="flex items-end gap-2.5 min-w-0">
               <span className="text-green-700 flex shrink-0 items-end justify-center w-[2.25rem] sm:w-[2.35rem]">
-                <SleeperIcon
+                <SleeperBerthIcon
                   className={`${LEGEND_SLEEPER} inline-block`}
                   strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
                   fillOpacity={0}
@@ -640,32 +738,80 @@ export function SeatLayout({
   );
   
   const { lower, upper } = useMemo(
-    () => splitDecks(layout.rows, layout.cols, layout.labels, layout.types),
-    [layout.rows, layout.cols, layout.labels, layout.types]
+    () =>
+      splitDecks(
+        layout.rows,
+        layout.cols,
+        layout.labels,
+        layout.types,
+        layout.orientations
+      ),
+    [layout.rows, layout.cols, layout.labels, layout.types, layout.orientations]
   );
+
+  const { lowerRowGapPx, upperRowGapPx, lowerGridPadY, upperGridPadY } = useMemo(() => {
+    const baseGap = SPACING_CONFIG.ROW_GAP;
+    const { rowH: rowHL } = computeGridMetrics(lower);
+    const { rowH: rowHU } = computeGridMetrics(upper);
+    const topSpacer =
+      SPACING_CONFIG.STEERING_ROW_HEIGHT > 0 ? SPACING_CONFIG.STEERING_ROW_HEIGHT : 0;
+    const hLo = gridBodyHeightPx(rowHL, baseGap, topSpacer);
+    const hUp = gridBodyHeightPx(rowHU, baseGap, topSpacer);
+    const target = Math.max(hLo, hUp);
+
+    let lg = baseGap;
+    let ug = baseGap;
+    let lp = 0;
+    let up = 0;
+
+    if (rowHL.length > 1) {
+      lg = baseGap + (target - hLo) / (rowHL.length - 1);
+    } else if (rowHL.length === 1 && hLo < target) {
+      lp = (target - hLo) / 2;
+    }
+
+    if (rowHU.length > 1) {
+      ug = baseGap + (target - hUp) / (rowHU.length - 1);
+    } else if (rowHU.length === 1 && hUp < target) {
+      up = (target - hUp) / 2;
+    }
+
+    return {
+      lowerRowGapPx: lg,
+      upperRowGapPx: ug,
+      lowerGridPadY: lp,
+      upperGridPadY: up,
+    };
+  }, [lower, upper]);
   
   return (
     <div className="flex flex-col items-center w-full max-w-4xl mx-auto">
       {/* Legend */}
       <SeatTypesLegend />
       
-      {/* Lower and Upper deck side by side */}
-      <div 
-        className="grid grid-cols-1 sm:grid-cols-2 w-fit max-w-full place-items-start"
+      {/* Decks: width hugs seat grid (tight sides); equal card height; row gaps sync vertical span */}
+      <div
+        className="flex w-full flex-col items-stretch justify-center sm:flex-row sm:items-stretch"
         style={{ gap: `${SPACING_CONFIG.DECK_GAP}px` }}
       >
         {/* Lower Deck */}
-        <div 
-          className="border rounded-lg bg-muted/20 w-full min-w-0"
+        <div
+          className="flex w-fit max-w-full min-w-0 flex-col rounded-lg border bg-muted/20 sm:min-w-0"
           style={{ padding: `${SPACING_CONFIG.DECK_PADDING}px` }}
         >
-          <div className="flex items-center justify-between gap-2 mb-8 min-h-10">
+          <div className="mb-4 flex min-h-[3rem] shrink-0 items-center justify-between gap-2">
             <p className="text-xs font-semibold text-muted-foreground">Lower deck</p>
             <span title="Bus direction (front)">
               <SteeringWheelIcon className="h-12 w-12 shrink-0 text-gray-400" />
             </span>
           </div>
-          <div className="w-fit">
+          <div
+            className="flex flex-col items-stretch"
+            style={{
+              paddingTop: lowerGridPadY,
+              paddingBottom: lowerGridPadY,
+            }}
+          >
             <DeckGrid
               rows={lower}
               occupiedSet={occupiedSet}
@@ -677,19 +823,27 @@ export function SeatLayout({
               onFemaleOnlySeatClick={onFemaleOnlySeatClick}
               topSpacerRow
               deckType="lower"
+              rowGapPx={lowerRowGapPx}
             />
           </div>
         </div>
-        
+
         {/* Upper Deck */}
-        <div 
-          className="border rounded-lg bg-muted/20 w-full min-w-0"
+        <div
+          className="flex w-fit max-w-full min-w-0 flex-col rounded-lg border bg-muted/20 sm:min-w-0"
           style={{ padding: `${SPACING_CONFIG.DECK_PADDING}px` }}
         >
-          <div className="flex items-center justify-between gap-2 mb-10 min-h-10">
+          <div className="mb-4 flex min-h-[3rem] shrink-0 items-center justify-between gap-2">
             <p className="text-xs font-semibold text-muted-foreground">Upper deck</p>
+            <span className="inline-flex h-12 w-12 shrink-0" aria-hidden />
           </div>
-          <div className="w-fit">
+          <div
+            className="flex flex-col items-stretch"
+            style={{
+              paddingTop: upperGridPadY,
+              paddingBottom: upperGridPadY,
+            }}
+          >
             <DeckGrid
               rows={upper}
               occupiedSet={occupiedSet}
@@ -701,10 +855,123 @@ export function SeatLayout({
               onFemaleOnlySeatClick={onFemaleOnlySeatClick}
               topSpacerRow
               deckType="upper"
+              rowGapPx={upperRowGapPx}
             />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Operator visual editor: same icon geometry and column/row sizing as the passenger seat map.
+ * Click a cell to apply the currently selected palette type (handled by parent).
+ */
+export function OperatorSeatEditorGrid({
+  rows,
+  cols,
+  labels,
+  cellTypes,
+  cellOrientations,
+  onPaintCell,
+}: {
+  rows: number;
+  cols: number;
+  labels: string[];
+  cellTypes: SeatCellType[];
+  cellOrientations: SeatOrientation[];
+  onPaintCell: (flatIndex: number) => void;
+}) {
+  const matrix = useMemo(() => {
+    const m: CellInfo[][] = [];
+    for (let r = 0; r < rows; r++) {
+      const row: CellInfo[] = [];
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        const label = labels[i] ?? "";
+        const type = (cellTypes[i] ?? "seater") as CellType;
+        const orientation: SeatOrientation =
+          cellOrientations[i] === "landscape" ? "landscape" : "portrait";
+        row.push({ label, type, orientation });
+      }
+      m.push(row);
+    }
+    return m;
+  }, [rows, cols, labels, cellTypes, cellOrientations]);
+
+  const { colW, rowH } = useMemo(() => computeGridMetrics(matrix), [matrix]);
+  const colTemplate = colW.map((w) => `${w}px`).join(" ");
+  const rowTemplate = rowH.map((h) => `${h}px`).join(" ");
+
+  return (
+    <div
+      className="inline-grid items-stretch justify-items-center"
+      style={{
+        gridTemplateColumns: colTemplate,
+        gridTemplateRows: rowTemplate,
+        columnGap: `${SPACING_CONFIG.COLUMN_GAP}px`,
+        rowGap: `${SPACING_CONFIG.ROW_GAP}px`,
+      }}
+    >
+      {matrix.map((row, r) =>
+        row.map((cell, c) => {
+          const flatIndex = r * cols + c;
+          if (!cell.label) {
+            return (
+              <button
+                key={`aisle-${flatIndex}`}
+                type="button"
+                onClick={() => onPaintCell(flatIndex)}
+                className="flex items-center justify-center rounded-md border-2 border-dashed border-slate-400/90 bg-slate-100/90 text-[9px] font-medium text-slate-500 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:border-slate-600 dark:bg-muted/40 dark:hover:bg-muted/60"
+                style={{ width: colW[c], height: rowH[r], boxSizing: "border-box" }}
+              >
+                Aisle
+              </button>
+            );
+          }
+
+          const { iw, ih } = getIconBoxDims(cell.type ?? "seater", cell.orientation ?? "portrait");
+          const isSleeper = cell.type === "sleeper";
+
+          return (
+            <button
+              key={`seat-${flatIndex}`}
+              type="button"
+              onClick={() => onPaintCell(flatIndex)}
+              className="flex flex-col items-center justify-center gap-0.5 rounded-lg border-2 border-slate-300 bg-white shadow-sm transition-colors hover:border-primary hover:ring-2 hover:ring-primary/25 dark:border-slate-600 dark:bg-zinc-900/80 dark:hover:border-primary"
+              style={{
+                width: colW[c],
+                height: rowH[r],
+                boxSizing: "border-box",
+                padding: `${SPACING_CONFIG.SEAT_VERTICAL_PADDING}px ${SPACING_CONFIG.SEAT_HORIZONTAL_PADDING}px`,
+              }}
+              title="Click to apply selected seat type"
+            >
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center leading-[0] text-green-700 dark:text-green-500">
+                {isSleeper ? (
+                  <SleeperBerthIcon
+                    className="block shrink-0"
+                    style={{ width: iw, height: ih }}
+                    strokeWidth={SPACING_CONFIG.SLEEPER_STROKE_WIDTH}
+                    fillOpacity={0}
+                  />
+                ) : (
+                  <SeaterTopViewIcon
+                    className="block shrink-0"
+                    style={{ width: iw, height: ih }}
+                    fillOpacity={0}
+                    strokeWidth={SPACING_CONFIG.SEATER_STROKE_WIDTH}
+                  />
+                )}
+              </div>
+              <span className="shrink-0 text-[10px] font-bold tabular-nums text-slate-800 dark:text-slate-100">
+                {cell.label}
+              </span>
+            </button>
+          );
+        })
+      )}
     </div>
   );
 }

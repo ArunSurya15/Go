@@ -68,6 +68,16 @@ class SeatMapField(serializers.Field):
                     raise serializers.ValidationError(
                         f"types[{i}] must be one of: seater, sleeper, semi_sleeper, aisle."
                     )
+        orientations = data.get("orientations")
+        if orientations is not None:
+            if not isinstance(orientations, list):
+                raise serializers.ValidationError("orientations must be a list of strings.")
+            valid_o = {"portrait", "landscape"}
+            for i, o in enumerate(orientations):
+                if o is not None and str(o).lower() not in valid_o:
+                    raise serializers.ValidationError(
+                        f"orientations[{i}] must be portrait or landscape."
+                    )
         return json.dumps(data)
 
 

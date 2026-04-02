@@ -123,6 +123,12 @@ class ScheduleSeatMapView(generics.GenericAPIView):
         while len(types) < total:
             types.append("seater")
         types = types[:total]
+        orientations = layout.get("orientations")
+        if not isinstance(orientations, list):
+            orientations = []
+        orientations = [str(o).lower() if o else "portrait" for o in orientations][:total]
+        while len(orientations) < total:
+            orientations.append("portrait")
         occupied, seat_gender = get_occupied_and_seat_genders(schedule)
         occupied_details = [{'label': s, 'gender': seat_gender.get(s)} for s in sorted(occupied)]
         route_stops = []
@@ -135,7 +141,13 @@ class ScheduleSeatMapView(generics.GenericAPIView):
                     'lng': str(st.lng) if st.lng is not None else None,
                 })
         payload = {
-            'layout': {'rows': rows, 'cols': cols, 'labels': labels, 'types': types},
+            'layout': {
+                'rows': rows,
+                'cols': cols,
+                'labels': labels,
+                'types': types,
+                'orientations': orientations,
+            },
             'occupied': list(occupied),
             'occupied_details': occupied_details,
             'fare': str(schedule.fare),
