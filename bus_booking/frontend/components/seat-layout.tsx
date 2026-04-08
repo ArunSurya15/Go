@@ -12,6 +12,11 @@ type SeatLayoutProps = {
     orientations?: string[];
     /** When false, all rows show as one deck (no upper panel). Default true if omitted (legacy maps). */
     has_upper_deck?: boolean;
+    /**
+     * First row index of upper deck (split is exclusive: rows [0, deck_split_row) = lower).
+     * When omitted, lower/upper split defaults to Math.ceil(rows / 2).
+     */
+    deck_split_row?: number;
   };
   occupied: string[];
   occupiedDetails?: { label: string; gender?: "M" | "F" | string }[];
@@ -539,11 +544,24 @@ function splitDecks(
   labels: string[],
   types?: string[],
   orientations?: string[],
-  hasUpperDeck = true
+  hasUpperDeck = true,
+  deckSplitRowFromLayout?: number
 ): { lower: CellInfo[][]; upper: CellInfo[][] } {
   const lower: CellInfo[][] = [];
   const upper: CellInfo[][] = [];
-  const splitRow = hasUpperDeck ? Math.ceil(rows / 2) : rows;
+  let splitRow: number;
+  if (!hasUpperDeck) {
+    splitRow = rows;
+  } else if (
+    typeof deckSplitRowFromLayout === "number" &&
+    Number.isFinite(deckSplitRowFromLayout) &&
+    deckSplitRowFromLayout >= 1 &&
+    deckSplitRowFromLayout < rows
+  ) {
+    splitRow = Math.floor(deckSplitRowFromLayout);
+  } else {
+    splitRow = Math.ceil(rows / 2);
+  }
 
   for (let r = 0; r < rows; r++) {
     const rowCells: CellInfo[] = [];
@@ -927,9 +945,10 @@ export function SeatLayout({
         layout.labels,
         layout.types,
         layout.orientations,
-        hasUpperDeck
+        hasUpperDeck,
+        layout.deck_split_row
       ),
-    [layout.rows, layout.cols, layout.labels, layout.types, layout.orientations, hasUpperDeck]
+    [layout.rows, layout.cols, layout.labels, layout.types, layout.orientations, hasUpperDeck, layout.deck_split_row]
   );
 
   const singleDeck = !hasUpperDeck || upper.length === 0;
@@ -1032,6 +1051,7 @@ export function SeatLayout({
 /**
  * Operator visual editor: same icon geometry and column/row sizing as the passenger seat map.
  * Click a cell to apply the currently selected palette type (handled by parent).
+ * Set `readOnly` for a non-interactive preview (e.g. preset templates on Add bus).
  */
 export function OperatorSeatEditorGrid({
   rows,
@@ -1042,13 +1062,14 @@ export function OperatorSeatEditorGrid({
   onPaintCell,
   rowSlice,
   globalMetrics,
+  readOnly = false,
 }: {
   rows: number;
   cols: number;
   labels: string[];
   cellTypes: SeatCellType[];
   cellOrientations: SeatOrientation[];
-  onPaintCell: (flatIndex: number) => void;
+  onPaintCell?: (flatIndex: number) => void;
   /** If set, only render this row range (inclusive start, exclusive end). Used for lower/upper preview. */
   rowSlice?: { start: number; end: number };
   /**
@@ -1061,12 +1082,15 @@ export function OperatorSeatEditorGrid({
     rowGapPx: number;
     gridPadY: number;
   };
+  /** When true, cells are static (no painting). Omit or no-op `onPaintCell`. */
+  readOnly?: boolean;
 }) {
   const r0 = rowSlice?.start ?? 0;
   const r1 = rowSlice?.end ?? rows;
   const paintBrushRef = useRef(false);
 
   useEffect(() => {
+    if (readOnly) return;
     const stop = () => {
       paintBrushRef.current = false;
     };
@@ -1076,7 +1100,7 @@ export function OperatorSeatEditorGrid({
       window.removeEventListener("pointerup", stop);
       window.removeEventListener("pointercancel", stop);
     };
-  }, []);
+  }, [readOnly]);
 
   const matrix = useMemo(() => {
     const m: CellInfo[][] = [];
@@ -1113,22 +1137,27 @@ export function OperatorSeatEditorGrid({
   const rowTemplate = rowH.map((h) => `${h}px`).join(" ");
   const sliceRows = r1 - r0;
 
-  const paintProps = (flatIndex: number) => ({
-    onPointerDown: (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      paintBrushRef.current = true;
-      onPaintCell(flatIndex);
-    },
-    onPointerEnter: (e: React.PointerEvent) => {
-      if (e.buttons === 1 && paintBrushRef.current) onPaintCell(flatIndex);
-    },
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onPaintCell(flatIndex);
-      }
-    },
-  });
+  const paint = onPaintCell ?? (() => {});
+
+  const paintProps = (flatIndex: number) =>
+    readOnly
+      ? {}
+      : {
+          onPointerDown: (e: React.PointerEvent) => {
+            if (e.button !== 0) return;
+            paintBrushRef.current = true;
+            paint(flatIndex);
+          },
+          onPointerEnter: (e: React.PointerEvent) => {
+            if (e.buttons === 1 && paintBrushRef.current) paint(flatIndex);
+          },
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              paint(flatIndex);
+            }
+          },
+        };
 
   if (sliceRows <= 0 || matrix.length === 0) {
     return (
@@ -1140,7 +1169,10 @@ export function OperatorSeatEditorGrid({
 
   const grid = (
     <div
-      className="inline-grid touch-none select-none items-stretch justify-items-center"
+      className={cn(
+        "inline-grid select-none items-stretch justify-items-center",
+        readOnly ? "touch-auto" : "touch-none"
+      )}
       style={{
         gridTemplateColumns: colTemplate,
         gridTemplateRows: rowTemplate,
@@ -1153,13 +1185,33 @@ export function OperatorSeatEditorGrid({
           const globalR = r0 + r;
           const flatIndex = globalR * cols + c;
           if (cell.type === "blank") {
-            return (
+            const blankStyle = {
+              width: colW[c],
+              height: rowH[r],
+              boxSizing: "border-box" as const,
+            };
+            const blankClass = cn(
+              "flex items-center justify-center rounded-md border border-dotted border-slate-400/70 bg-slate-50/80 text-[9px] font-medium text-slate-400 dark:border-slate-600 dark:bg-zinc-900/40 dark:text-slate-500",
+              !readOnly &&
+                "transition-colors hover:border-primary/50 hover:bg-slate-100"
+            );
+            return readOnly ? (
+              <div
+                key={`blank-${flatIndex}`}
+                className={blankClass}
+                style={blankStyle}
+                role="img"
+                aria-label="Blank spacer"
+              >
+                Blank
+              </div>
+            ) : (
               <button
                 key={`blank-${flatIndex}`}
                 type="button"
                 {...paintProps(flatIndex)}
-                className="flex items-center justify-center rounded-md border border-dotted border-slate-400/70 bg-slate-50/80 text-[9px] font-medium text-slate-400 transition-colors hover:border-primary/50 hover:bg-slate-100 dark:border-slate-600 dark:bg-zinc-900/40 dark:text-slate-500"
-                style={{ width: colW[c], height: rowH[r], boxSizing: "border-box" }}
+                className={blankClass}
+                style={blankStyle}
                 title="Blank spacer (not a seat or walkway)"
               >
                 Blank
@@ -1167,13 +1219,32 @@ export function OperatorSeatEditorGrid({
             );
           }
           if (!cell.label) {
-            return (
+            const aisleStyle = {
+              width: colW[c],
+              height: rowH[r],
+              boxSizing: "border-box" as const,
+            };
+            const aisleClass = cn(
+              "flex items-center justify-center rounded-md border-2 border-dashed border-slate-400/90 bg-slate-100/90 text-[9px] font-medium text-slate-500 dark:border-slate-600 dark:bg-muted/40",
+              !readOnly && "transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:hover:bg-muted/60"
+            );
+            return readOnly ? (
+              <div
+                key={`aisle-${flatIndex}`}
+                className={aisleClass}
+                style={aisleStyle}
+                role="img"
+                aria-label="Aisle"
+              >
+                Aisle
+              </div>
+            ) : (
               <button
                 key={`aisle-${flatIndex}`}
                 type="button"
                 {...paintProps(flatIndex)}
-                className="flex items-center justify-center rounded-md border-2 border-dashed border-slate-400/90 bg-slate-100/90 text-[9px] font-medium text-slate-500 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:border-slate-600 dark:bg-muted/40 dark:hover:bg-muted/60"
-                style={{ width: colW[c], height: rowH[r], boxSizing: "border-box" }}
+                className={aisleClass}
+                style={aisleStyle}
               >
                 Aisle
               </button>
@@ -1189,7 +1260,9 @@ export function OperatorSeatEditorGrid({
             t === "sleeper" ? "sleeper" : t === "semi_sleeper" ? "semi_sleeper" : "seater";
 
           const seatShell = cn(
-            "flex flex-col items-center justify-center gap-0.5 overflow-visible rounded-lg border-2 shadow-sm transition-colors hover:border-primary hover:ring-2 hover:ring-primary/25 dark:hover:border-primary",
+            "flex flex-col items-center justify-center gap-0.5 overflow-visible rounded-lg border-2 shadow-sm",
+            !readOnly &&
+              "transition-colors hover:border-primary hover:ring-2 hover:ring-primary/25 dark:hover:border-primary",
             isSleeper &&
               "border-blue-300 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-950/40",
             isSemi &&
@@ -1199,20 +1272,15 @@ export function OperatorSeatEditorGrid({
               "border-emerald-200 bg-white dark:border-emerald-900/50 dark:bg-zinc-900/80"
           );
 
-          return (
-            <button
-              key={`seat-${flatIndex}`}
-              type="button"
-              {...paintProps(flatIndex)}
-              className={seatShell}
-              style={{
-                width: colW[c],
-                height: rowH[r],
-                boxSizing: "border-box",
-                padding: `${SPACING_CONFIG.SEAT_VERTICAL_PADDING}px ${SPACING_CONFIG.SEAT_HORIZONTAL_PADDING}px`,
-              }}
-              title="Click or drag to paint with the selected type"
-            >
+          const seatStyle = {
+            width: colW[c],
+            height: rowH[r],
+            boxSizing: "border-box" as const,
+            padding: `${SPACING_CONFIG.SEAT_VERTICAL_PADDING}px ${SPACING_CONFIG.SEAT_HORIZONTAL_PADDING}px`,
+          };
+
+          const seatInner = (
+            <>
               <div
                 className={cn(
                   "flex min-h-0 flex-1 flex-col items-center justify-center overflow-visible leading-[0]",
@@ -1232,6 +1300,29 @@ export function OperatorSeatEditorGrid({
               <span className="shrink-0 text-[10px] font-bold tabular-nums text-slate-800 dark:text-slate-100">
                 {cell.label}
               </span>
+            </>
+          );
+
+          return readOnly ? (
+            <div
+              key={`seat-${flatIndex}`}
+              className={seatShell}
+              style={seatStyle}
+              role="img"
+              aria-label={`Seat ${cell.label}`}
+            >
+              {seatInner}
+            </div>
+          ) : (
+            <button
+              key={`seat-${flatIndex}`}
+              type="button"
+              {...paintProps(flatIndex)}
+              className={seatShell}
+              style={seatStyle}
+              title="Click or drag to paint with the selected type"
+            >
+              {seatInner}
             </button>
           );
         })

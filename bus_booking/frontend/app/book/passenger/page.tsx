@@ -27,11 +27,15 @@ type PassengerInfo = { name: string; age: string; gender: string };
 
 function getSeatDeck(seat: string, layout: SeatMapResponse["layout"]): "Lower deck" | "Upper deck" {
   const { rows, cols, labels } = layout;
-  const half = Math.ceil(rows / 2);
+  const raw = layout.deck_split_row;
+  const split =
+    typeof raw === "number" && Number.isFinite(raw) && raw >= 1 && raw < rows
+      ? Math.floor(raw)
+      : Math.ceil(rows / 2);
   const idx = labels.indexOf(seat);
   if (idx === -1) return "Lower deck";
   const rowIdx = Math.floor(idx / cols);
-  return rowIdx < half ? "Lower deck" : "Upper deck";
+  return rowIdx < split ? "Lower deck" : "Upper deck";
 }
 
 export default function PassengerPage() {

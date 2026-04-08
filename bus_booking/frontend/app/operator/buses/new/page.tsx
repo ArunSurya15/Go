@@ -22,63 +22,18 @@ import {
   type SeatCellType,
   type SeatOrientation,
 } from "@/components/seat-layout";
+import {
+  LAYOUT_TEMPLATES,
+  LAYOUT_OPTION_GROUP_LABEL,
+  LAYOUT_OPTION_GROUP_ORDER,
+  countBookableCells,
+  buildTypesFromTemplate,
+  getTemplateDeckSplitRow,
+  resolveDeckSplitRow,
+  mirrorTypesForDoubleDeck,
+} from "@/lib/operator-bus-layout-templates";
 
 const COL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-export type LayoutTemplateDef = {
-  id: string;
-  name: string;
-  rows: number;
-  cols: number;
-  description: string;
-  /** Single-deck bus: all rows in one panel when booking. Omit = double deck (split rows). */
-  has_upper_deck?: boolean;
-};
-
-/** Standard layouts: top view — left side = first columns, right side = last columns. */
-export const LAYOUT_TEMPLATES: LayoutTemplateDef[] = [
-  { id: "standard_2_2", name: "Standard 2+2 (seater)", rows: 9, cols: 4, description: "9 rows × 4 seats (2 left, 2 right)" },
-  { id: "standard_2_1", name: "Standard 2+1", rows: 9, cols: 3, description: "9 rows × 3 (2 left, 1 right)" },
-  {
-    id: "sleeper_1_1_1_lower",
-    name: "Sleeper 1+1+1 (single deck)",
-    rows: 10,
-    cols: 3,
-    description: "10 rows × 3 berths — one deck only (no upper section in the seat map).",
-    has_upper_deck: false,
-  },
-  {
-    id: "sleeper_1_1_1_upper",
-    name: "Sleeper 1+1+1 (single deck, upper-style grid)",
-    rows: 10,
-    cols: 3,
-    description: "10 rows × 3 berths — one deck; use for upper-only style numbering if needed.",
-    has_upper_deck: false,
-  },
-  {
-    id: "sleeper_2_1_lower",
-    name: "Sleeper 2+1 (single deck)",
-    rows: 10,
-    cols: 3,
-    description: "10 rows × 3 (2+1) — one deck only.",
-    has_upper_deck: false,
-  },
-  {
-    id: "sleeper_double",
-    name: "Sleeper lower + upper (1+1+1)",
-    rows: 20,
-    cols: 3,
-    description: "20 rows × 3 berths — first half = lower deck, second half = upper deck (double-decker).",
-    has_upper_deck: true,
-  },
-  {
-    id: "custom",
-    name: "Custom (visual editor)",
-    rows: 9,
-    cols: 4,
-    description: "Draw your own layout: seater, sleeper, semi-sleeper, aisle, blank spacer.",
-  },
-];
 
 const SEAT_TYPES: { id: SeatCellType; label: string; color: string; icon?: React.ReactNode }[] = [
   {
@@ -143,20 +98,119 @@ function generateSeatLabels(rows: number, cols: number, types: SeatCellType[]): 
   return labels;
 }
 
-const SLEEPER_TEMPLATE_IDS = new Set<string>([
-  "sleeper_1_1_1_lower",
-  "sleeper_1_1_1_upper",
-  "sleeper_2_1_lower",
-  "sleeper_double",
-]);
+type EditorLayoutMetricsBundle = {
+  colW: number[];
+  rowH: number[];
+  gaps: {
+    lowerRowGapPx: number;
+    upperRowGapPx: number;
+    lowerGridPadY: number;
+    upperGridPadY: number;
+  };
+};
 
-function buildTypesFromTemplate(templateId: string, rows: number, cols: number): SeatCellType[] {
-  const total = rows * cols;
-  const types: SeatCellType[] = Array(total).fill("seater");
-  if (SLEEPER_TEMPLATE_IDS.has(templateId)) {
-    for (let i = 0; i < total; i++) types[i] = "sleeper";
-  }
-  return types;
+/** Shared lower/upper (or single-deck) preview — editable or read-only. */
+function LayoutPreviewDeckGrids({
+  rows,
+  cols,
+  labels,
+  types,
+  orientations,
+  hasUpperDeck,
+  deckSplitRow,
+  editorLayoutMetrics,
+  readOnly,
+  onPaintCell,
+}: {
+  rows: number;
+  cols: number;
+  labels: string[];
+  types: SeatCellType[];
+  orientations: SeatOrientation[];
+  hasUpperDeck: boolean;
+  deckSplitRow: number;
+  editorLayoutMetrics: EditorLayoutMetricsBundle;
+  readOnly: boolean;
+  onPaintCell?: (index: number) => void;
+}) {
+  return (
+    <div className="w-full overflow-x-auto rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-zinc-950/50">
+      <p className="mb-3 text-[11px] font-medium text-slate-600 dark:text-slate-400">
+        Layout preview (front of bus at the top of each grid)
+      </p>
+      {hasUpperDeck ? (
+        <div
+          className="flex flex-col items-stretch sm:flex-row sm:justify-center"
+          style={{ gap: `${SPACING_CONFIG.DECK_GAP}px` }}
+        >
+          <div className="flex min-w-0 flex-col items-center sm:items-stretch">
+            <p className="mb-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 sm:text-left">
+              Lower
+            </p>
+            <div className="flex justify-center sm:justify-start">
+              <OperatorSeatEditorGrid
+                rows={rows}
+                cols={cols}
+                labels={labels}
+                cellTypes={types}
+                cellOrientations={orientations}
+                readOnly={readOnly}
+                onPaintCell={onPaintCell}
+                rowSlice={{ start: 0, end: deckSplitRow }}
+                globalMetrics={{
+                  colW: editorLayoutMetrics.colW,
+                  rowH: editorLayoutMetrics.rowH,
+                  rowGapPx: editorLayoutMetrics.gaps.lowerRowGapPx,
+                  gridPadY: editorLayoutMetrics.gaps.lowerGridPadY,
+                }}
+              />
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col items-center sm:items-stretch">
+            <p className="mb-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 sm:text-left">
+              Upper
+            </p>
+            <div className="flex justify-center sm:justify-start">
+              <OperatorSeatEditorGrid
+                rows={rows}
+                cols={cols}
+                labels={labels}
+                cellTypes={types}
+                cellOrientations={orientations}
+                readOnly={readOnly}
+                onPaintCell={onPaintCell}
+                rowSlice={{ start: deckSplitRow, end: rows }}
+                globalMetrics={{
+                  colW: editorLayoutMetrics.colW,
+                  rowH: editorLayoutMetrics.rowH,
+                  rowGapPx: editorLayoutMetrics.gaps.upperRowGapPx,
+                  gridPadY: editorLayoutMetrics.gaps.upperGridPadY,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-center">
+          <OperatorSeatEditorGrid
+            rows={rows}
+            cols={cols}
+            labels={labels}
+            cellTypes={types}
+            cellOrientations={orientations}
+            readOnly={readOnly}
+            onPaintCell={onPaintCell}
+            globalMetrics={{
+              colW: editorLayoutMetrics.colW,
+              rowH: editorLayoutMetrics.rowH,
+              rowGapPx: SPACING_CONFIG.ROW_GAP,
+              gridPadY: 0,
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AddBusPage() {
@@ -169,19 +223,22 @@ export default function AddBusPage() {
     registration_no: "",
     service_name: "",
     layout_template: "standard_2_2",
-    capacity: 36,
-    rows: 9,
-    cols: 4,
+    capacity: 40,
+    rows: 10,
+    cols: 5,
   });
   const [selectedType, setSelectedType] = useState<SeatCellType>("seater");
-  const [cellTypes, setCellTypes] = useState<SeatCellType[]>(() => Array(9 * 4).fill("seater"));
+  const [cellTypes, setCellTypes] = useState<SeatCellType[]>(() => Array(10 * 5).fill("seater"));
   const [cellOrientations, setCellOrientations] = useState<SeatOrientation[]>(() =>
-    Array(9 * 4).fill("portrait")
+    Array(10 * 5).fill("portrait")
   );
   /** When painting seats: false = portrait (vertical berth / normal seat); true = landscape (horizontal along the row). */
   const [alongRowBlock, setAlongRowBlock] = useState(false);
   /** Double-decker: split rows into lower + upper in the passenger seat map. Off = single “Seat layout” panel. */
-  const [hasUpperDeck, setHasUpperDeck] = useState(true);
+  const [hasUpperDeck, setHasUpperDeck] = useState(false); // seaters have no upper deck
+  const [sidesMirrored, setSidesMirrored] = useState(false);
+  /** When layout is Custom, preserves lower/upper row split from the template (e.g. 10+6 vs default 8+8). */
+  const [customDeckSplitRow, setCustomDeckSplitRow] = useState<number | null>(null);
   const [featureCatalog, setFeatureCatalog] = useState<BusFeatureDef[]>(BUS_FEATURES_FALLBACK);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [extrasNote, setExtrasNote] = useState("");
@@ -223,37 +280,65 @@ export default function AddBusPage() {
   const totalCells = form.rows * form.cols;
   const capacityFromLayout = useMemo(() => {
     if (form.layout_template === "custom") {
-      return cellTypes.slice(0, totalCells).filter((t) => t !== "aisle" && t !== "blank").length;
+      return countBookableCells(cellTypes.slice(0, totalCells));
     }
-    return totalCells;
-  }, [form.layout_template, form.rows, form.cols, cellTypes, totalCells]);
+    let types = buildTypesFromTemplate(form.layout_template, form.rows, form.cols);
+    if (sidesMirrored) {
+      const split = resolveDeckSplitRow(
+        form.layout_template,
+        form.rows,
+        customDeckSplitRow,
+        hasUpperDeck
+      );
+      types = mirrorTypesForDoubleDeck(types, form.rows, form.cols, split);
+    }
+    return countBookableCells(types);
+  }, [
+    form.layout_template,
+    form.rows,
+    form.cols,
+    cellTypes,
+    totalCells,
+    sidesMirrored,
+    customDeckSplitRow,
+    hasUpperDeck,
+  ]);
 
-  const deckSplitRow = useMemo(() => Math.ceil(form.rows / 2), [form.rows]);
+  const deckSplitRow = useMemo(
+    () =>
+      resolveDeckSplitRow(form.layout_template, form.rows, customDeckSplitRow, hasUpperDeck),
+    [form.layout_template, form.rows, customDeckSplitRow, hasUpperDeck]
+  );
+
+  const deckSplitExplanation = useMemo(() => {
+    const n = form.rows;
+    const split = deckSplitRow;
+    const upperFirst = split + 1;
+    const lowerCount = split;
+    const upperCount = n - split;
+    return `Lower deck = rows 1–${split} (${lowerCount} row${lowerCount === 1 ? "" : "s"}). Upper deck = rows ${upperFirst}–${n} (${upperCount} row${upperCount === 1 ? "" : "s"}).`;
+  }, [form.rows, deckSplitRow]);
 
   const applyTemplate = (templateId: string) => {
     const t = LAYOUT_TEMPLATES.find((x) => x.id === templateId);
     if (t) {
+      const newTypes =
+        templateId === "custom"
+          ? (Array(t.rows * t.cols).fill("seater") as SeatCellType[])
+          : buildTypesFromTemplate(templateId, t.rows, t.cols);
+      const cap = countBookableCells(newTypes);
       setForm((f) => ({
         ...f,
         layout_template: templateId,
         rows: t.rows,
         cols: t.cols,
-        capacity: templateId === "custom" ? capacityFromLayout : t.rows * t.cols,
+        capacity: cap,
       }));
-      const newTypes = templateId === "custom"
-        ? Array(t.rows * t.cols).fill("seater") as SeatCellType[]
-        : buildTypesFromTemplate(templateId, t.rows, t.cols);
-      setCellTypes((prev) => {
-        const next = [...newTypes];
-        for (let i = 0; i < Math.min(prev.length, next.length); i++) next[i] = prev[i];
-        return next;
-      });
-      setCellOrientations((prev) => {
-        const next = Array(t.rows * t.cols).fill("portrait") as SeatOrientation[];
-        for (let i = 0; i < Math.min(prev.length, next.length); i++) next[i] = prev[i];
-        return next;
-      });
-      setHasUpperDeck(t.has_upper_deck !== undefined ? t.has_upper_deck : true);
+      setCellTypes(newTypes);
+      setCellOrientations(Array(t.rows * t.cols).fill("portrait") as SeatOrientation[]);
+      setHasUpperDeck(t.has_upper_deck === true);
+      setSidesMirrored(false);
+      setCustomDeckSplitRow(null);
     }
   };
 
@@ -268,6 +353,11 @@ export default function AddBusPage() {
       const next = Array(newTotal).fill("portrait") as SeatOrientation[];
       for (let i = 0; i < Math.min(prev.length, newTotal); i++) next[i] = prev[i];
       return next;
+    });
+    setCustomDeckSplitRow((prev) => {
+      if (prev === null) return null;
+      if (newRows < 2) return null;
+      return Math.min(Math.max(1, prev), newRows - 1);
     });
   };
 
@@ -324,25 +414,63 @@ export default function AddBusPage() {
 
   const showVisualEditor = form.layout_template === "custom";
 
-  const editorPreviewLabels = useMemo(
-    () =>
-      showVisualEditor ? generateSeatLabels(form.rows, form.cols, cellTypes) : [],
-    [showVisualEditor, form.rows, form.cols, cellTypes]
+  const totalSeatCells = form.rows * form.cols;
+
+  const layoutPreviewTypes = useMemo((): SeatCellType[] => {
+    if (form.layout_template === "custom") {
+      const next = cellTypes.slice(0, totalSeatCells);
+      while (next.length < totalSeatCells) next.push("seater");
+      return next;
+    }
+    let types = buildTypesFromTemplate(form.layout_template, form.rows, form.cols);
+    if (sidesMirrored) {
+      const split = resolveDeckSplitRow(
+        form.layout_template,
+        form.rows,
+        customDeckSplitRow,
+        hasUpperDeck
+      );
+      types = mirrorTypesForDoubleDeck(types, form.rows, form.cols, split);
+    }
+    return types;
+  }, [
+    form.layout_template,
+    form.rows,
+    form.cols,
+    cellTypes,
+    totalSeatCells,
+    sidesMirrored,
+    customDeckSplitRow,
+    hasUpperDeck,
+  ]);
+
+  const layoutPreviewLabels = useMemo(
+    () => generateSeatLabels(form.rows, form.cols, layoutPreviewTypes),
+    [form.rows, form.cols, layoutPreviewTypes]
   );
 
-  const editorFullMatrix = useMemo(() => {
-    if (!showVisualEditor) return null;
-    return buildSeatEditorMatrix(
-      form.rows,
-      form.cols,
-      editorPreviewLabels,
-      cellTypes,
-      cellOrientations
-    );
-  }, [showVisualEditor, form.rows, form.cols, editorPreviewLabels, cellTypes, cellOrientations]);
+  const layoutPreviewOrientations = useMemo((): SeatOrientation[] => {
+    if (form.layout_template === "custom") {
+      const next = cellOrientations.slice(0, totalSeatCells);
+      while (next.length < totalSeatCells) next.push("portrait");
+      return next;
+    }
+    return Array(totalSeatCells).fill("portrait") as SeatOrientation[];
+  }, [form.layout_template, form.rows, form.cols, cellOrientations, totalSeatCells]);
+
+  const editorFullMatrix = useMemo(
+    () =>
+      buildSeatEditorMatrix(
+        form.rows,
+        form.cols,
+        layoutPreviewLabels,
+        layoutPreviewTypes,
+        layoutPreviewOrientations
+      ),
+    [form.rows, form.cols, layoutPreviewLabels, layoutPreviewTypes, layoutPreviewOrientations]
+  );
 
   const editorLayoutMetrics = useMemo(() => {
-    if (!editorFullMatrix) return null;
     const { colW, rowH } = computeGridMetrics(editorFullMatrix);
     const lower = editorFullMatrix.slice(0, deckSplitRow);
     const upper = editorFullMatrix.slice(deckSplitRow);
@@ -372,17 +500,19 @@ export default function AddBusPage() {
 
     if (form.layout_template === "custom") {
       types = cellTypes.slice(0, rows * cols);
-      labels = generateSeatLabels(rows, cols, types);
     } else {
-      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-      labels = [];
-      for (let r = 1; r <= rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          labels.push(`${r}${letters[c] ?? String(c + 1)}`);
-        }
-      }
       types = buildTypesFromTemplate(form.layout_template, rows, cols);
+      if (sidesMirrored) {
+        const split = resolveDeckSplitRow(
+          form.layout_template,
+          rows,
+          customDeckSplitRow,
+          hasUpperDeck
+        );
+        types = mirrorTypesForDoubleDeck(types, rows, cols, split);
+      }
     }
+    labels = generateSeatLabels(rows, cols, types);
 
     const capacity = labels.filter((l) => l !== "").length;
     const totalCells = rows * cols;
@@ -395,11 +525,26 @@ export default function AddBusPage() {
           })()
         : Array(totalCells).fill("portrait");
 
+    const deckSplitForApi =
+      hasUpperDeck && rows >= 2
+        ? resolveDeckSplitRow(form.layout_template, rows, customDeckSplitRow, hasUpperDeck)
+        : undefined;
+
     try {
       await operatorApi.createBus(token, {
         registration_no: form.registration_no.trim(),
         capacity,
-        seat_map: { rows, cols, labels, types, orientations, has_upper_deck: hasUpperDeck },
+        seat_map: {
+          rows,
+          cols,
+          labels,
+          types,
+          orientations,
+          has_upper_deck: hasUpperDeck,
+          ...(deckSplitForApi !== undefined && deckSplitForApi < rows
+            ? { deck_split_row: deckSplitForApi }
+            : {}),
+        },
         features: selectedFeatures,
         extras_note: extrasNote.trim(),
         ...(form.service_name.trim() ? { service_name: form.service_name.trim() } : {}),
@@ -411,6 +556,20 @@ export default function AddBusPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * Load the currently-selected template's cells into the custom editor,
+   * then switch to custom mode — so the operator can tweak any preset.
+   */
+  const handleCustomizeTemplate = () => {
+    setCustomDeckSplitRow(
+      getTemplateDeckSplitRow(form.layout_template, form.rows)
+    );
+    setCellTypes([...layoutPreviewTypes] as SeatCellType[]);
+    setCellOrientations(Array(form.rows * form.cols).fill("portrait") as SeatOrientation[]);
+    setForm((f) => ({ ...f, layout_template: "custom" }));
+    setSidesMirrored(false);
   };
 
   if (loading) {
@@ -432,8 +591,8 @@ export default function AddBusPage() {
         <CardHeader>
           <CardTitle>Add bus</CardTitle>
           <CardDescription>
-            Pick a template or draw a custom grid. Sleeper templates include a true double-decker (lower + upper) option.
-            In the editor, set horizontal vs vertical seats and use blank spacers or aisles where you need gaps.
+            Choose an industry-style layout (seater, sleeper, semi-sleeper recliner, or hybrid) or paint a custom grid.
+            Templates match common Indian bus types: 2×2 / 2×1 / 3×2 seaters, 2×1 and 1×1 sleepers, recliners, and mixed decks.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -441,23 +600,6 @@ export default function AddBusPage() {
             {error && (
               <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 border border-amber-200">{error}</p>
             )}
-
-            <div className="space-y-2">
-              <Label htmlFor="layout_template">Layout</Label>
-              <select
-                id="layout_template"
-                value={form.layout_template}
-                onChange={(e) => applyTemplate(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {LAYOUT_TEMPLATES.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <p className="text-xs text-slate-500">
-                {LAYOUT_TEMPLATES.find((t) => t.id === form.layout_template)?.description}
-              </p>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="registration_no">Registration number</Label>
@@ -537,40 +679,161 @@ export default function AddBusPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="rows">Rows</Label>
-                <Input
-                  id="rows"
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={form.rows}
-                  onChange={(e) => {
-                    const v = Math.max(1, parseInt(e.target.value, 10) || 1);
-                    setForm((f) => ({ ...f, rows: v }));
-                    if (showVisualEditor) handleRowsColsChange(v, form.cols);
-                  }}
-                  disabled={!showVisualEditor}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cols">Columns</Label>
-                <Input
-                  id="cols"
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={form.cols}
-                  onChange={(e) => {
-                    const v = Math.max(1, parseInt(e.target.value, 10) || 1);
-                    setForm((f) => ({ ...f, cols: v }));
-                    if (showVisualEditor) handleRowsColsChange(form.rows, v);
-                  }}
-                  disabled={!showVisualEditor}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="layout_template">Bus layout template</Label>
+              <select
+                id="layout_template"
+                value={form.layout_template}
+                onChange={(e) => applyTemplate(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {LAYOUT_OPTION_GROUP_ORDER.map((group) => (
+                  <optgroup key={group} label={LAYOUT_OPTION_GROUP_LABEL[group]}>
+                    {LAYOUT_TEMPLATES.filter((t) => t.optionGroup === group).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-snug">
+                {LAYOUT_TEMPLATES.find((t) => t.id === form.layout_template)?.description}
+              </p>
             </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2.5 dark:border-slate-700 dark:bg-zinc-900/30">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Capacity</p>
+                <span className="rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300">
+                  {capacityFromLayout} seats
+                </span>
+                {hasUpperDeck && (
+                  <span className="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs text-slate-600 dark:bg-zinc-800 dark:border-zinc-700 dark:text-slate-400">
+                    lower + upper deck
+                  </span>
+                )}
+              </div>
+              {hasUpperDeck && (
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {deckSplitExplanation}
+                </p>
+              )}
+              {showVisualEditor ? (
+                <div className="grid grid-cols-2 gap-4 pt-1">
+                  <div className="space-y-2">
+                    <Label htmlFor="rows">
+                      Rows{" "}
+                      <span className="font-normal text-slate-400 text-[11px]">(more rows = more seats)</span>
+                    </Label>
+                    <Input
+                      id="rows"
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={form.rows}
+                      onChange={(e) => {
+                        const v = Math.max(1, parseInt(e.target.value, 10) || 1);
+                        setForm((f) => ({ ...f, rows: v }));
+                        handleRowsColsChange(v, form.cols);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cols">
+                      Columns{" "}
+                      <span className="font-normal text-slate-400 text-[11px]">(includes aisle)</span>
+                    </Label>
+                    <Input
+                      id="cols"
+                      type="number"
+                      min={1}
+                      max={8}
+                      value={form.cols}
+                      onChange={(e) => {
+                        const v = Math.max(1, parseInt(e.target.value, 10) || 1);
+                        setForm((f) => ({ ...f, cols: v }));
+                        handleRowsColsChange(form.rows, v);
+                      }}
+                    />
+                  </div>
+                  {hasUpperDeck && form.rows >= 2 && (
+                    <div className="col-span-2 space-y-2">
+                      <Label htmlFor="lower_deck_rows">
+                        Rows on lower deck{" "}
+                        <span className="font-normal text-slate-400 text-[11px]">
+                          (upper starts the row after this)
+                        </span>
+                      </Label>
+                      <Input
+                        id="lower_deck_rows"
+                        type="number"
+                        min={1}
+                        max={form.rows - 1}
+                        value={deckSplitRow}
+                        onChange={(e) => {
+                          const v = Math.max(
+                            1,
+                            Math.min(form.rows - 1, parseInt(e.target.value, 10) || 1)
+                          );
+                          setCustomDeckSplitRow(v);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Template uses <strong className="text-slate-700 dark:text-slate-300">{form.rows} rows</strong>.{" "}
+                  Need more or fewer seats? Pick <strong>Custom</strong> and adjust the row count.
+                </p>
+              )}
+            </div>
+
+            {!showVisualEditor && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-2 dark:border-slate-700 dark:bg-zinc-950/20">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Layout preview</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSidesMirrored((m) => !m)}
+                      title="Swap which side has fewer / more seats (e.g. 2+1 ↔ 1+2)"
+                      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        sidesMirrored
+                          ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-zinc-900 dark:text-slate-400"
+                      }`}
+                    >
+                      <span aria-hidden>⇄</span>
+                      {sidesMirrored ? "Sides interchanged" : "Interchange sides"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCustomizeTemplate}
+                      title="Load this template into the custom editor to tweak seats, blank out cells, or change row count"
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 dark:border-slate-700 dark:bg-zinc-900 dark:text-slate-400 dark:hover:border-amber-700 dark:hover:bg-amber-950/30 dark:hover:text-amber-300"
+                    >
+                      <span aria-hidden>✏</span> Customize
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Use <strong className="text-slate-600 dark:text-slate-300">Interchange</strong> to swap left/right sides. Use <strong className="text-slate-600 dark:text-slate-300">Customize</strong> to edit seat types, blank cells, or change row count.
+                </p>
+                <LayoutPreviewDeckGrids
+                  rows={form.rows}
+                  cols={form.cols}
+                  labels={layoutPreviewLabels}
+                  types={layoutPreviewTypes}
+                  orientations={layoutPreviewOrientations}
+                  hasUpperDeck={hasUpperDeck}
+                  deckSplitRow={deckSplitRow}
+                  editorLayoutMetrics={editorLayoutMetrics}
+                  readOnly
+                />
+              </div>
+            )}
 
             {showVisualEditor && (
               <div className="rounded-lg border bg-slate-50/50 p-4 space-y-4">
@@ -674,97 +937,24 @@ export default function AddBusPage() {
                     </label>
                   </div>
 
-                  <div className="w-full overflow-x-auto rounded-lg border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-zinc-950/50">
-                    <p className="mb-3 text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                      Layout preview (front of bus at the top of each grid)
-                    </p>
-                    {hasUpperDeck ? (
-                      <div
-                        className="flex flex-col items-stretch sm:flex-row sm:justify-center"
-                        style={{ gap: `${SPACING_CONFIG.DECK_GAP}px` }}
-                      >
-                        <div className="flex min-w-0 flex-col items-center sm:items-stretch">
-                          <p className="mb-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 sm:text-left">
-                            Lower
-                          </p>
-                          <div className="flex justify-center sm:justify-start">
-                            <OperatorSeatEditorGrid
-                              rows={form.rows}
-                              cols={form.cols}
-                              labels={editorPreviewLabels}
-                              cellTypes={cellTypes}
-                              cellOrientations={cellOrientations}
-                              onPaintCell={setCellType}
-                              rowSlice={{ start: 0, end: deckSplitRow }}
-                              globalMetrics={
-                                editorLayoutMetrics
-                                  ? {
-                                      colW: editorLayoutMetrics.colW,
-                                      rowH: editorLayoutMetrics.rowH,
-                                      rowGapPx: editorLayoutMetrics.gaps.lowerRowGapPx,
-                                      gridPadY: editorLayoutMetrics.gaps.lowerGridPadY,
-                                    }
-                                  : undefined
-                              }
-                            />
-                          </div>
-                        </div>
-                        <div className="flex min-w-0 flex-col items-center sm:items-stretch">
-                          <p className="mb-2 text-center text-xs font-semibold text-slate-700 dark:text-slate-300 sm:text-left">
-                            Upper
-                          </p>
-                          <div className="flex justify-center sm:justify-start">
-                            <OperatorSeatEditorGrid
-                              rows={form.rows}
-                              cols={form.cols}
-                              labels={editorPreviewLabels}
-                              cellTypes={cellTypes}
-                              cellOrientations={cellOrientations}
-                              onPaintCell={setCellType}
-                              rowSlice={{ start: deckSplitRow, end: form.rows }}
-                              globalMetrics={
-                                editorLayoutMetrics
-                                  ? {
-                                      colW: editorLayoutMetrics.colW,
-                                      rowH: editorLayoutMetrics.rowH,
-                                      rowGapPx: editorLayoutMetrics.gaps.upperRowGapPx,
-                                      gridPadY: editorLayoutMetrics.gaps.upperGridPadY,
-                                    }
-                                  : undefined
-                              }
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-center">
-                        <OperatorSeatEditorGrid
-                          rows={form.rows}
-                          cols={form.cols}
-                          labels={editorPreviewLabels}
-                          cellTypes={cellTypes}
-                          cellOrientations={cellOrientations}
-                          onPaintCell={setCellType}
-                          globalMetrics={
-                            editorLayoutMetrics
-                              ? {
-                                  colW: editorLayoutMetrics.colW,
-                                  rowH: editorLayoutMetrics.rowH,
-                                  rowGapPx: SPACING_CONFIG.ROW_GAP,
-                                  gridPadY: 0,
-                                }
-                              : undefined
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <LayoutPreviewDeckGrids
+                    rows={form.rows}
+                    cols={form.cols}
+                    labels={layoutPreviewLabels}
+                    types={layoutPreviewTypes}
+                    orientations={layoutPreviewOrientations}
+                    hasUpperDeck={hasUpperDeck}
+                    deckSplitRow={deckSplitRow}
+                    editorLayoutMetrics={editorLayoutMetrics}
+                    readOnly={false}
+                    onPaintCell={setCellType}
+                  />
                 </div>
               </div>
             )}
 
             <p className="text-sm text-slate-500">
-              Total seats: {form.layout_template === "custom" ? capacityFromLayout : totalCells}
+              Total seats: {capacityFromLayout}
             </p>
 
             <div className="flex gap-3 pt-2">
@@ -783,3 +973,4 @@ export default function AddBusPage() {
     </div>
   );
 }
+

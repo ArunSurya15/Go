@@ -145,15 +145,27 @@ class ScheduleSeatMapView(generics.GenericAPIView):
             has_upper_deck = True
         else:
             has_upper_deck = bool(hud)
+        deck_split_row = None
+        dsr = layout.get('deck_split_row')
+        if dsr is not None:
+            try:
+                d = int(dsr)
+                if 1 <= d < rows:
+                    deck_split_row = d
+            except (TypeError, ValueError):
+                pass
+        layout_payload = {
+            'rows': rows,
+            'cols': cols,
+            'labels': labels,
+            'types': types,
+            'orientations': orientations,
+            'has_upper_deck': has_upper_deck,
+        }
+        if deck_split_row is not None:
+            layout_payload['deck_split_row'] = deck_split_row
         payload = {
-            'layout': {
-                'rows': rows,
-                'cols': cols,
-                'labels': labels,
-                'types': types,
-                'orientations': orientations,
-                'has_upper_deck': has_upper_deck,
-            },
+            'layout': layout_payload,
             'occupied': list(occupied),
             'occupied_details': occupied_details,
             'fare': str(schedule.fare),
