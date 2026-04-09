@@ -1,12 +1,18 @@
 # How to run the server and frontend
 
+**Python:** use **3.12, 3.13, or 3.14** (see `pyproject.toml` and `.python-version`). Django 5.2 LTS does not support Python 3.11 or older.
+
 ## 1. Backend (Django API)
 
 From the project root (`bus_booking`):
 
 ```bash
+# Create venv once (if needed): py -3.13 -m venv venv
 # Activate virtual environment (Windows PowerShell)
 .\venv\Scripts\Activate.ps1
+
+# Install dependencies (after Python upgrade)
+pip install -r requirements.txt
 
 # Go to backend
 cd backend

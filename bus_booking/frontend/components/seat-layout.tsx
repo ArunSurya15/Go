@@ -20,7 +20,10 @@ type SeatLayoutProps = {
   };
   occupied: string[];
   occupiedDetails?: { label: string; gender?: "M" | "F" | string }[];
+  /** Default fare; used when `seatFares` has no entry for a label. */
   fare: string;
+  /** Optional per-seat prices (label -> rupees string), e.g. from seat-map API `seat_fares`. */
+  seatFares?: Record<string, string>;
   selected: string[];
   onSelect: (seat: string) => void;
   /** Called when user selects (clicks to add) an available female-only seat */
@@ -589,6 +592,7 @@ function DeckGrid({
   occupiedSet,
   genderMap,
   fare,
+  seatFares,
   selectedSet,
   onSelect,
   femaleOnlySet,
@@ -601,6 +605,7 @@ function DeckGrid({
   occupiedSet: Set<string>;
   genderMap: Map<string, string>;
   fare: string;
+  seatFares?: Record<string, string>;
   selectedSet: Set<string>;
   onSelect: (seat: string) => void;
   femaleOnlySet: Set<string>;
@@ -619,7 +624,15 @@ function DeckGrid({
   const spacerHeight = SPACING_CONFIG.STEERING_ROW_HEIGHT;
   const hasTopRow = !!topSpacerRow && spacerHeight > 0;
 
-  const fareInt = Math.round(Number(fare)) || 0;
+  const defaultFareInt = Math.round(Number(fare)) || 0;
+  const priceForLabel = (label: string) => {
+    const raw = seatFares?.[label];
+    if (raw != null && String(raw).trim() !== "") {
+      const n = Math.round(Number(raw));
+      return Number.isFinite(n) ? n : defaultFareInt;
+    }
+    return defaultFareInt;
+  };
   const { colW, rowH } = computeGridMetrics(rows);
   const gapY = rowGapPx ?? SPACING_CONFIG.ROW_GAP;
 
@@ -762,7 +775,7 @@ function DeckGrid({
               )}
               {isAvailable && (
                 <span className="text-[10px] leading-none shrink-0 text-gray-500 dark:text-gray-400">
-                  ₹{fareInt}
+                  ₹{priceForLabel(label)}
                 </span>
               )}
             </button>
@@ -780,7 +793,7 @@ function DeckGrid({
                   role="tooltip"
                 >
                   <div className="rounded-lg bg-zinc-900 px-3 py-2 text-center text-white shadow-lg dark:bg-zinc-950">
-                    <p className="text-sm font-semibold leading-tight tabular-nums">₹{fareInt}</p>
+                    <p className="text-sm font-semibold leading-tight tabular-nums">₹{priceForLabel(label)}</p>
                     <p className="text-[11px] font-medium text-white/95 mt-0.5">Female only</p>
                   </div>
                   <div className="flex justify-center">
@@ -912,6 +925,7 @@ export function SeatLayout({
   occupied,
   occupiedDetails,
   fare,
+  seatFares,
   selected,
   onSelect,
   onFemaleOnlySeatClick,
@@ -1000,6 +1014,7 @@ export function SeatLayout({
               occupiedSet={occupiedSet}
               genderMap={genderMap}
               fare={fare}
+              seatFares={seatFares}
               selectedSet={selectedSet}
               onSelect={onSelect}
               femaleOnlySet={femaleOnlySet}
@@ -1032,6 +1047,7 @@ export function SeatLayout({
                 occupiedSet={occupiedSet}
                 genderMap={genderMap}
                 fare={fare}
+                seatFares={seatFares}
                 selectedSet={selectedSet}
                 onSelect={onSelect}
                 femaleOnlySet={femaleOnlySet}

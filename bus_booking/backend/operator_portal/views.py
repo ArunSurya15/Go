@@ -67,6 +67,7 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
                 ),
                 "boarding_points",
                 "dropping_points",
+                "bookings",
             )
             .order_by("-departure_dt")
         )
@@ -131,6 +132,7 @@ class ScheduleDetailView(generics.RetrieveUpdateAPIView):
                 ),
                 "boarding_points",
                 "dropping_points",
+                "bookings",
             )
         )
 

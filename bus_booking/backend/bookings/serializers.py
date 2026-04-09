@@ -39,7 +39,7 @@ class ScheduleSerializer(serializers.ModelSerializer):
         model = Schedule
         fields = (
             'id', 'route', 'route_pattern', 'bus', 'departure_dt', 'arrival_dt', 'fare', 'status',
-            'fare_original', 'operator_promo_title', 'platform_promo_title',
+            'fare_original', 'operator_promo_title', 'operator_offer_style', 'platform_promo_title',
             'platform_promo_line',
         )
 

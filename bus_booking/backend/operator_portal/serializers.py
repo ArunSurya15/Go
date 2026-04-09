@@ -2,8 +2,15 @@ import json
 from rest_framework import serializers
 from buses.models import Bus, Operator
 from common.models import Route, RoutePattern
+from decimal import Decimal
+
 from bookings.models import Schedule, BoardingPoint, DroppingPoint
+from bookings.pricing import seat_fares_dict_from_schedule
 from buses.constants import VALID_FEATURE_IDS
+
+OPERATOR_OFFER_STYLES = frozenset(
+    {"", "last_minute", "flash_sale", "weekend_special", "festival", "custom"}
+)
 
 
 class OperatorProfileSerializer(serializers.ModelSerializer):
@@ -174,6 +181,9 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    fare_editable = serializers.SerializerMethodField()
+    confirmed_bookings_count = serializers.SerializerMethodField()
+    seat_fares = serializers.SerializerMethodField()
 
     class Meta:
         model = Schedule
@@ -187,12 +197,69 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
             "fare",
             "fare_original",
             "operator_promo_title",
+            "operator_offer_style",
+            "seat_fares",
             "platform_promo_title",
             "status",
             "boarding_points",
             "dropping_points",
+            "fare_editable",
+            "confirmed_bookings_count",
         )
-        read_only_fields = ("status", "platform_promo_title")
+        read_only_fields = (
+            "status",
+            "platform_promo_title",
+            "fare_editable",
+            "confirmed_bookings_count",
+            "seat_fares",
+        )
+
+    def get_fare_editable(self, obj):
+        if not getattr(obj, "pk", None):
+            return True
+        return not obj.bookings.filter(status="CONFIRMED").exists()
+
+    def get_confirmed_bookings_count(self, obj):
+        if not getattr(obj, "pk", None):
+            return 0
+        return obj.bookings.filter(status="CONFIRMED").count()
+
+    def get_seat_fares(self, obj):
+        return seat_fares_dict_from_schedule(obj)
+
+    def validate_operator_offer_style(self, value):
+        v = (value or "").strip()
+        if v not in OPERATOR_OFFER_STYLES:
+            raise serializers.ValidationError("Invalid offer highlight style.")
+        return v
+
+    def _validate_seat_fares_dict(self, value):
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("seat_fares must be an object mapping seat labels to prices.")
+        out = {}
+        for k, v in value.items():
+            ks = str(k).strip()
+            if not ks:
+                continue
+            try:
+                d = Decimal(str(v)).quantize(Decimal("0.01"))
+            except Exception:
+                raise serializers.ValidationError(f"Invalid price for seat {ks}.")
+            out[ks] = str(d)
+        return out
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["route"] = {
+            "id": instance.route_id,
+            "origin": instance.route.origin,
+            "destination": instance.route.destination,
+            "distance_km": instance.route.distance_km,
+        }
+        data["bus"] = OperatorBusSerializer(instance.bus, context=self.context).data
+        return data
 
     def validate_bus(self, value):
         operator = self.context.get("operator")
@@ -235,6 +302,11 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
         boarding_points = validated_data.pop("boarding_points", [])
         dropping_points = validated_data.pop("dropping_points", [])
         validated_data.setdefault("status", "PENDING")
+        request = self.context.get("request")
+        if request and "seat_fares" in getattr(request, "data", {}):
+            validated_data["seat_fares_json"] = json.dumps(
+                self._validate_seat_fares_dict(request.data.get("seat_fares"))
+            )
         schedule = super().create(validated_data)
         for bp in boarding_points:
             BoardingPoint.objects.create(schedule=schedule, **bp)
@@ -242,7 +314,43 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
             DroppingPoint.objects.create(schedule=schedule, **dp)
         return schedule
 
+    def _fare_unchanged(self, instance, validated_data):
+        for key in ("fare", "fare_original"):
+            if key not in validated_data:
+                continue
+            old = getattr(instance, key)
+            new = validated_data[key]
+            d_old = Decimal(str(old)) if old is not None else None
+            d_new = Decimal(str(new)) if new is not None else None
+            if d_old != d_new:
+                return False
+        return True
+
+    def _seat_fares_unchanged(self, instance, request):
+        if not request or "seat_fares" not in getattr(request, "data", {}):
+            return True
+        old = seat_fares_dict_from_schedule(instance)
+        new = self._validate_seat_fares_dict(request.data.get("seat_fares"))
+        return old == new
+
     def update(self, instance, validated_data):
+        request = self.context.get("request")
+        confirmed = instance.bookings.filter(status="CONFIRMED").exists()
+        if confirmed and (
+            not self._fare_unchanged(instance, validated_data)
+            or not self._seat_fares_unchanged(instance, request)
+        ):
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Cannot change selling fare, MRP, or per-seat prices: this trip already has confirmed bookings."
+                    ]
+                }
+            )
+        if request and "seat_fares" in getattr(request, "data", {}):
+            validated_data["seat_fares_json"] = json.dumps(
+                self._validate_seat_fares_dict(request.data.get("seat_fares"))
+            )
         boarding_points = validated_data.pop("boarding_points", None)
         dropping_points = validated_data.pop("dropping_points", None)
         schedule = super().update(instance, validated_data)

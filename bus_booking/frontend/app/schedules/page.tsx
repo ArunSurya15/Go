@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BusRatingReviewsTrigger } from "@/components/bus-rating-reviews-trigger";
+import { ScheduleOfferRibbon } from "@/components/schedule-offer-ribbon";
 
 function buildSchedulesPath(routeId: string, date: string, from: string, to: string) {
   const q = new URLSearchParams();
@@ -658,14 +659,10 @@ export default function SchedulesPage() {
                     className="rounded-xl"
                   >
                     <Card className="group relative overflow-hidden rounded-xl border border-zinc-200/95 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_16px_-4px_rgba(0,0,0,0.12),0_14px_36px_-8px_rgba(0,0,0,0.14)] ring-1 ring-black/[0.04] transition-shadow duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-900/60 dark:ring-white/[0.06] dark:shadow-[0_4px_14px_-2px_rgba(0,0,0,0.5),0_12px_32px_-6px_rgba(0,0,0,0.45)] hover:shadow-[0_16px_48px_-10px_rgba(0,0,0,0.2),0_8px_24px_-6px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_20px_56px_-8px_rgba(0,0,0,0.65),0_10px_28px_-6px_rgba(0,0,0,0.45)]">
-                      {s.operator_promo_title ? (
-                        <div
-                          className="absolute right-0 top-0 z-10 max-w-[55%] rounded-bl-lg bg-gradient-to-b from-amber-300 to-amber-500 px-2.5 py-1 text-[10px] font-bold leading-tight text-amber-950 shadow-sm sm:max-w-[45%] sm:text-[11px]"
-                          style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 8% 100%, 0 70%)" }}
-                        >
-                          {s.operator_promo_title}
-                        </div>
-                      ) : null}
+                      <ScheduleOfferRibbon
+                        operatorPromoTitle={s.operator_promo_title}
+                        operatorOfferStyle={s.operator_offer_style}
+                      />
                       <CardContent className="p-0">
                         <div className="p-4 sm:p-5 pr-2 sm:pr-5">
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

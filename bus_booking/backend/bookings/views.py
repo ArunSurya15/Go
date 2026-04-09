@@ -28,6 +28,7 @@ from .seat_rules import (
     layout_labels_and_cols_from_bus,
     male_reserved_seat_adjacent_to_female,
 )
+from .pricing import merged_seat_fare_map, total_fare_for_seats
 
 class ScheduleListView(generics.ListAPIView):
     serializer_class = ScheduleSerializer
@@ -164,11 +165,13 @@ class ScheduleSeatMapView(generics.GenericAPIView):
         }
         if deck_split_row is not None:
             layout_payload['deck_split_row'] = deck_split_row
+        seat_fares_merged = merged_seat_fare_map(schedule, labels, types)
         payload = {
             'layout': layout_payload,
             'occupied': list(occupied),
             'occupied_details': occupied_details,
             'fare': str(schedule.fare),
+            'seat_fares': seat_fares_merged,
             'route_stops': route_stops,
         }
         if schedule.route_pattern_id:
@@ -306,8 +309,19 @@ class CreatePaymentView(generics.GenericAPIView):
             return Response({'detail': 'Invalid schedule_id'}, status=404)
         if schedule.status != 'ACTIVE':
             return Response({'detail': 'Schedule is not available for booking'}, status=400)
+        computed = total_fare_for_seats(schedule, seats)
         if not amount:
-            amount = str(Decimal(schedule.fare) * Decimal(len(seats)))
+            amount = str(computed)
+        else:
+            try:
+                client_amt = Decimal(str(amount)).quantize(Decimal('0.01'))
+            except Exception:
+                return Response({'detail': 'Invalid amount'}, status=400)
+            if client_amt != computed:
+                return Response(
+                    {'detail': 'Amount does not match selected seat prices.', 'expected': str(computed)},
+                    status=400,
+                )
 
         import json
         booking_kw = {

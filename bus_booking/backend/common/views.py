@@ -1,4 +1,3 @@
-from typing import Optional
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,7 +14,7 @@ class RouteListView(generics.ListAPIView):
     permission_classes = [AllowAny]
 
     @staticmethod
-    def _normalize(city: Optional[str]) -> Optional[str]:
+    def _normalize(city: str | None) -> str | None:
         if not city:
             return city
         c = city.strip().lower()

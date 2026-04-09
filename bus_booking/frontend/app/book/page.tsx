@@ -65,7 +65,11 @@ export default function BookPage() {
     setLoading(true);
     try {
       await booking.reserve(token, scheduleId, seats);
-      const payment = await booking.createPayment(token, scheduleId, seats, amount);
+      const payment = await booking.createPayment(token, {
+        schedule_id: scheduleId,
+        seats,
+        amount,
+      });
       setBookingId(payment.booking_id);
       setOrderId(payment.order_id);
       setStep("payment");

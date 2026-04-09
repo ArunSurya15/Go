@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -37,7 +37,16 @@ function SelectSeatsContent() {
 
   const fare = seatMap?.fare ?? fareParam;
   const seats = selectedSeats;
-  const amount = Math.round(parseFloat(fare) * seats.length);
+  const amount = useMemo(() => {
+    if (seats.length === 0) return 0;
+    const base = parseFloat(seatMap?.fare ?? fareParam ?? "0") || 0;
+    const map = seatMap?.seat_fares;
+    return seats.reduce((sum, label) => {
+      const raw = map?.[label];
+      const unit = raw != null && String(raw).trim() !== "" ? parseFloat(raw) : base;
+      return sum + (Number.isFinite(unit) ? unit : 0);
+    }, 0);
+  }, [seats, seatMap, fareParam]);
 
   const handleToggleSeat = (seat: string) => {
     setSelectedSeats((prev) =>
@@ -87,7 +96,7 @@ function SelectSeatsContent() {
         to: to || "",
         fare,
         seats,
-        amount,
+        amount: amount.toFixed(2),
       };
       if (typeof window !== "undefined") {
         sessionStorage.setItem(FLOW_KEY, JSON.stringify(flow));
@@ -149,6 +158,7 @@ function SelectSeatsContent() {
               occupied={seatMap.occupied}
               occupiedDetails={seatMap.occupied_details}
               fare={seatMap.fare}
+              seatFares={seatMap.seat_fares}
               selected={selectedSeats}
               onSelect={handleToggleSeat}
             />
@@ -156,11 +166,26 @@ function SelectSeatsContent() {
             <div className="mt-6 sticky bottom-4 bg-amber-50 dark:bg-amber-950/30 border rounded-xl p-4 shadow-lg flex flex-wrap items-center justify-between gap-4">
               <div>
                 <span className="font-medium">{seats.length} seat(s)</span>
-                {seats.length > 0 && (
-                  <span className="text-muted-foreground ml-2">
-                    ₹{amount} (₹{Math.round(Number(fare))} × {seats.length})
-                  </span>
-                )}
+                {seats.length > 0 && (() => {
+                  const fmt = amount % 1 === 0 ? String(Math.round(amount)) : amount.toFixed(2);
+                  const units = seats.map((l) =>
+                    parseFloat(seatMap?.seat_fares?.[l] ?? seatMap?.fare ?? fareParam ?? "0")
+                  );
+                  const varied =
+                    units.length > 1 && new Set(units.map((u) => u.toFixed(2))).size > 1;
+                  return (
+                    <span className="text-muted-foreground ml-2">
+                      ₹{fmt} total
+                      {varied ? (
+                        <span className="block text-[11px] mt-0.5">Sum of selected seat prices</span>
+                      ) : (
+                        <span className="ml-1">
+                          (₹{Math.round(Number(fare))} × {seats.length})
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()}
               </div>
               {error && (
                 <div className="w-full">

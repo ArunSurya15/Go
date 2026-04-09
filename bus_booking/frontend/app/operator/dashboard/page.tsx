@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { operatorApi, type OperatorBus } from "@/lib/api";
+import { operatorApi, type OperatorBus, type Schedule } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -12,7 +12,7 @@ export default function OperatorDashboardPage() {
   const router = useRouter();
   const { getValidToken } = useAuth();
   const [buses, setBuses] = useState<OperatorBus[]>([]);
-  const [schedules, setSchedules] = useState<unknown[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<{ name?: string } | null>(null);
 
@@ -109,23 +109,36 @@ export default function OperatorDashboardPage() {
               <div className="space-y-2">
                 <p className="text-sm text-slate-600">New schedules are PENDING until approved by admin.</p>
                 <ul className="space-y-1 text-xs">
-                  {(schedules as Array<{ id: number; route: { origin: string; destination: string }; departure_dt: string }>).slice(0, 3).map((s) => (
-                    <li key={s.id} className="flex items-center justify-between">
+                  {schedules.slice(0, 3).map((s) => (
+                    <li key={s.id} className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-slate-600">
                         {s.route.origin} → {s.route.destination}
                       </span>
-                      <Link
-                        href={`/operator/track/${s.id}`}
-                        className="text-indigo-600 hover:underline text-xs"
-                      >
-                        Track
-                      </Link>
+                      <span className="flex gap-2 shrink-0">
+                        <Link
+                          href={`/operator/schedules/${s.id}/edit`}
+                          className="text-indigo-600 hover:underline"
+                        >
+                          Fare
+                        </Link>
+                        <Link
+                          href={`/operator/track/${s.id}`}
+                          className="text-indigo-600 hover:underline"
+                        >
+                          Track
+                        </Link>
+                      </span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/operator/schedules">
+                <Button size="sm" variant="secondary" disabled={schedules.length === 0}>
+                  Pricing &amp; offers
+                </Button>
+              </Link>
               <Link href="/operator/schedules/new">
                 <Button size="sm" disabled={buses.length === 0}>Add schedule</Button>
               </Link>
@@ -140,6 +153,9 @@ export default function OperatorDashboardPage() {
           <ul className="mt-2 space-y-1 text-sm">
             <li>
               <Link href="/operator/buses/new" className="text-indigo-600 hover:underline">Add bus</Link>
+            </li>
+            <li>
+              <Link href="/operator/schedules" className="text-indigo-600 hover:underline">Schedules — pricing &amp; offers</Link>
             </li>
             <li>
               <Link href="/operator/schedules/new" className="text-indigo-600 hover:underline">Add schedule</Link>

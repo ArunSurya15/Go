@@ -28,8 +28,13 @@ class Schedule(models.Model):
     fare_original = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     # Operator-entered promo line for this trip (e.g. "Exclusive ₹100 OFF")
     operator_promo_title = models.CharField(max_length=160, blank=True, default='')
+    # Visual theme for passenger app ribbons: last_minute, flash_sale, weekend_special, festival, custom
+    operator_offer_style = models.CharField(max_length=24, blank=True, default='')
     # e-GO platform promo (set by admin/backend or default in settings)
     platform_promo_title = models.CharField(max_length=160, blank=True, default='')
+    # Optional per seat label (e.g. "1A", "5B") -> price string; missing keys use `fare`
+    # Stored as JSON text (SQLite-friendly; same pattern as Bus.seat_map_json).
+    seat_fares_json = models.TextField(default="{}", blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
 
     class Meta:
