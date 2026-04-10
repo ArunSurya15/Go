@@ -18,9 +18,17 @@ from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
+from operator_portal.views import OperatorBookingsExportView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/users/', include('users.urls')),
+    # Registered here (before include) so /api/operator/manifest/day/ always resolves.
+    path(
+        'api/operator/manifest/day/',
+        OperatorBookingsExportView.as_view(),
+        name='operator_manifest_day',
+    ),
     path('api/operator/', include('operator_portal.urls')),
     path('api/', include('common.urls')),
     path('api/', include('bookings.urls')),

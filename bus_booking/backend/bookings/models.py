@@ -162,3 +162,54 @@ class Payment(models.Model):
     status = models.CharField(max_length=30, default='CREATED')
     raw_response = models.TextField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class OperatorSale(models.Model):
+    """
+    Denormalized sale line for reporting: one row per confirmed booking, scoped to the bus operator.
+    Updated via signals when booking status changes (confirm / refund / cancel).
+    """
+
+    REVERSAL_CHOICES = (
+        ("", "Active"),
+        ("REFUNDED", "Refunded"),
+        ("CANCELLED", "Cancelled"),
+    )
+
+    booking = models.OneToOneField(Booking, on_delete=models.CASCADE, related_name="operator_sale")
+    operator = models.ForeignKey(
+        "buses.Operator",
+        on_delete=models.CASCADE,
+        related_name="sales",
+    )
+    schedule = models.ForeignKey(Schedule, on_delete=models.PROTECT, related_name="operator_sales")
+    gross_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    seat_count = models.PositiveSmallIntegerField(default=1)
+    currency = models.CharField(max_length=3, default="INR")
+    confirmed_at = models.DateTimeField(
+        help_text="When the sale was first recognized (payment succeeded / booking confirmed).",
+    )
+    reversal_status = models.CharField(
+        max_length=20,
+        choices=REVERSAL_CHOICES,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Operator sale"
+        verbose_name_plural = "Operator sales"
+        ordering = ["-confirmed_at", "-id"]
+        indexes = [
+            models.Index(fields=["operator", "-confirmed_at"], name="bookings_osale_op_cf_idx"),
+            models.Index(
+                fields=["operator", "reversal_status", "-confirmed_at"],
+                name="bookings_osale_op_rev_cf_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Sale {self.id} booking={self.booking_id} ₹{self.gross_amount}"

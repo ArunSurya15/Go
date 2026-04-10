@@ -35,15 +35,10 @@ export default function OperatorTrackPage() {
         return;
       }
       try {
-        const schedules = await operatorApi.schedules(token);
-        const s = schedules.find((x) => x.id === scheduleId);
+        const s = await operatorApi.getSchedule(token, scheduleId);
         if (!cancelled) {
-          if (s) {
-            setSchedule(s);
-            loadTrackingData();
-          } else {
-            setError("Schedule not found.");
-          }
+          setSchedule(s);
+          loadTrackingData();
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load schedule.");

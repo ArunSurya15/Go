@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { operatorApi, type OperatorOfferStyle, type Schedule, type SeatFareMap } from "@/lib/api";
+import {
+  operatorApi,
+  type OperatorOfferStyle,
+  type Schedule,
+  type SeatFareMap,
+  type SeatMapResponse,
+} from "@/lib/api";
+import { SeatLayout } from "@/components/seat-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +80,35 @@ function bookableLabelsFromSeatMap(seatMap: { labels?: string[]; types?: string[
 }
 
 /** Only labels that differ from base fare are stored on the schedule. */
+/** Build `SeatLayout` props from the bus JSON (same shape as passenger seat-map `layout`). */
+function layoutFromBusSeatMap(
+  sm:
+    | {
+        rows?: number;
+        cols?: number;
+        labels?: string[];
+        types?: string[];
+        orientations?: string[];
+        has_upper_deck?: boolean;
+        deck_split_row?: number;
+      }
+    | undefined
+    | null
+): SeatMapResponse["layout"] | null {
+  if (!sm?.rows || !sm?.cols || !Array.isArray(sm.labels) || sm.labels.length === 0) return null;
+  const n = sm.rows * sm.cols;
+  if (sm.labels.length !== n) return null;
+  return {
+    rows: sm.rows,
+    cols: sm.cols,
+    labels: sm.labels,
+    types: sm.types,
+    orientations: sm.orientations,
+    has_upper_deck: sm.has_upper_deck,
+    deck_split_row: sm.deck_split_row,
+  };
+}
+
 function buildSeatFareOverrides(
   bookable: string[],
   inputs: Record<string, string>,
@@ -148,21 +184,93 @@ export default function EditSchedulePricingPage() {
     load();
   }, [id, load, router]);
 
+  const fareEditable = schedule?.fare_editable !== false;
+  const fareLocked = !fareEditable;
+
+  const pricingLayout = useMemo(() => {
+    if (!schedule?.bus) return null;
+    const sm = (
+      schedule.bus as {
+        seat_map?: {
+          rows?: number;
+          cols?: number;
+          labels?: string[];
+          types?: string[];
+          orientations?: string[];
+          has_upper_deck?: boolean;
+          deck_split_row?: number;
+        };
+      }
+    )?.seat_map;
+    return layoutFromBusSeatMap(sm ?? null);
+  }, [schedule]);
+
+  const previewSeatFares = useMemo(() => {
+    if (!schedule?.bus) return {};
+    const sm = (schedule.bus as { seat_map?: { labels?: string[]; types?: string[] } })?.seat_map;
+    const bookable = bookableLabelsFromSeatMap(sm);
+    const base = fare.trim() || "0";
+    const out: Record<string, string> = {};
+    for (const lb of bookable) {
+      const v = (seatFareInputs[lb] ?? "").trim();
+      out[lb] = v || base;
+    }
+    return out;
+  }, [schedule, seatFareInputs, fare]);
+
+  const occupiedSeatSet = useMemo(
+    () => new Set(schedule?.occupied_seats ?? []),
+    [schedule?.occupied_seats]
+  );
+
+  const focusSeatRow = (label: string) => {
+    if (occupiedSeatSet.has(label)) return;
+    const el = document.querySelector<HTMLElement>(
+      `[data-operator-seat-row="${CSS.escape(label)}"]`
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const input = el?.querySelector<HTMLInputElement>("input");
+    input?.focus();
+    input?.select();
+  };
+
   const applyDiscountPercent = (pct: number) => {
     const currentSelling = parseFloat(fare) || 0;
     const currentMrp = parseFloat(fareOriginal) || 0;
+    const prevBaseStr = fare.trim();
+    const prevBaseNum = parseFloat(prevBaseStr) || 0;
+
+    let newFareStr: string | null = null;
+
     if (currentMrp > 0) {
-      setFare(round2(currentMrp * (1 - pct / 100)));
-      setError("");
-      return;
-    }
-    if (currentSelling <= 0) {
+      newFareStr = round2(currentMrp * (1 - pct / 100));
+    } else if (currentSelling <= 0) {
       setError("Set a selling fare first.");
       return;
+    } else {
+      setFareOriginal(round2(currentSelling));
+      newFareStr = round2(currentSelling * (1 - pct / 100));
     }
-    setFareOriginal(round2(currentSelling));
-    setFare(round2(currentSelling * (1 - pct / 100)));
+
+    if (newFareStr === null) return;
+
+    setFare(newFareStr);
     setError("");
+
+    const sm = (schedule?.bus as { seat_map?: { labels?: string[]; types?: string[] } })?.seat_map;
+    const bookable = bookableLabelsFromSeatMap(sm);
+    setSeatFareInputs((prev) => {
+      const next = { ...prev };
+      for (const lb of bookable) {
+        if (occupiedSeatSet.has(lb)) continue;
+        const pv = (prev[lb] ?? "").trim();
+        const pvNum = parseFloat(pv);
+        if (!pv || !Number.isFinite(pvNum) || Math.abs(pvNum - prevBaseNum) < 0.02) {
+          next[lb] = newFareStr!;
+        }
+      }
+      return next;
+    });
   };
 
   const applyCustomPercent = () => {
@@ -179,21 +287,23 @@ export default function EditSchedulePricingPage() {
     setDone(false);
     const token = await getValidToken();
     if (!token) return;
+    if (!schedule) return;
     if (!fareLocked && !fare.trim()) {
       setError("Selling fare is required.");
       return;
     }
     setSaving(true);
     try {
+      const sm = (schedule.bus as { seat_map?: { labels?: string[]; types?: string[] } })?.seat_map;
+      const bookable = bookableLabelsFromSeatMap(sm);
+      const seat_fares = buildSeatFareOverrides(bookable, seatFareInputs, fare.trim());
       if (fareLocked) {
         await operatorApi.updateSchedule(token, id, {
           operator_promo_title: operatorPromoTitle.trim(),
           operator_offer_style: operatorOfferStyle || "",
+          seat_fares,
         });
       } else {
-        const sm = (schedule.bus as { seat_map?: { labels?: string[]; types?: string[] } })?.seat_map;
-        const bookable = bookableLabelsFromSeatMap(sm);
-        const seat_fares = buildSeatFareOverrides(bookable, seatFareInputs, fare.trim());
         await operatorApi.updateSchedule(token, id, {
           fare: fare.trim(),
           ...(fareOriginal.trim() ? { fare_original: fareOriginal.trim() } : { fare_original: null }),
@@ -221,13 +331,11 @@ export default function EditSchedulePricingPage() {
   }
 
   const route = schedule.route as { origin?: string; destination?: string };
-  const fareEditable = schedule.fare_editable !== false;
-  const fareLocked = !fareEditable;
   const seatMapForLabels = (schedule.bus as { seat_map?: { labels?: string[]; types?: string[] } })?.seat_map;
   const bookableSeatLabels = bookableLabelsFromSeatMap(seatMapForLabels);
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-16">
+    <div className="mx-auto max-w-4xl space-y-6 pb-16">
       <div>
         <Link
           href="/operator/schedules"
@@ -238,6 +346,14 @@ export default function EditSchedulePricingPage() {
         <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">Pricing & offers</h1>
         <p className="mt-1 text-slate-600 dark:text-slate-400">
           {route.origin} → {route.destination}
+        </p>
+        <p className="mt-2">
+          <Link
+            href={`/operator/schedules/${schedule.id}/bookings`}
+            className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            Bookings & manifest →
+          </Link>
         </p>
       </div>
 
@@ -255,9 +371,9 @@ export default function EditSchedulePricingPage() {
 
       {fareLocked ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200">
-          <strong>Pricing is locked.</strong> This schedule has {schedule.confirmed_bookings_count ?? "one or more"}{" "}
-          confirmed booking(s). Selling fare and MRP can&apos;t change — you can still update how offers &amp; ribbons
-          look below.
+          <strong>Base fare is locked.</strong> This schedule has {schedule.confirmed_bookings_count ?? "one or more"}{" "}
+          confirmed booking(s), so the <strong>selling fare</strong> and <strong>MRP</strong> can&apos;t change. You
+          can still set <strong>per-seat prices</strong> for seats that are not booked yet, and update offers below.
         </div>
       ) : null}
 
@@ -313,11 +429,11 @@ export default function EditSchedulePricingPage() {
                   </Button>
                 ))}
               </div>
-              <div className="flex flex-wrap items-end gap-2 pt-1">
-                <div className="space-y-1">
-                  <Label htmlFor="custom_pct" className="text-xs">
-                    Custom %
-                  </Label>
+              <div className="space-y-1 pt-1">
+                <Label htmlFor="custom_pct" className="text-xs">
+                  Custom %
+                </Label>
+                <div className="flex flex-wrap items-center gap-2">
                   <Input
                     id="custom_pct"
                     className="h-9 w-20"
@@ -325,27 +441,52 @@ export default function EditSchedulePricingPage() {
                     onChange={(e) => setCustomPct(e.target.value)}
                     inputMode="decimal"
                   />
+                  <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={applyCustomPercent}>
+                    Apply
+                  </Button>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="mb-0.5" onClick={applyCustomPercent}>
-                  Apply
-                </Button>
               </div>
             </div>
           ) : null}
         </CardContent>
       </Card>
 
-      {!fareLocked && bookableSeatLabels.length > 0 ? (
+      {bookableSeatLabels.length > 0 ? (
         <Card>
           <CardHeader>
             <CardTitle>Per-seat pricing</CardTitle>
             <CardDescription>
-              Charge different amounts per seat (e.g. lower vs upper, window vs aisle). Prices shown to passengers on
-              each berth/seat. Only seats that differ from the <strong>base selling fare</strong> above are stored as
-              overrides — others use the base fare automatically.
+              The map matches the passenger view: booked seats are tinted (pink female, blue male) and aren&apos;t
+              editable. Change prices only for free seats. Quick discount above applies to base fare and is hidden
+              while base fare is locked — you can still type amounts per free seat here.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {pricingLayout ? (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Live availability and colours match booking. Click a free seat to jump to its price row.
+                </p>
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50/90 px-2 py-4 dark:border-slate-700 dark:bg-slate-900/50">
+                  <div className="min-w-0 flex justify-center [&_.max-w-4xl]:max-w-none">
+                    <SeatLayout
+                      layout={pricingLayout}
+                      occupied={schedule.occupied_seats ?? []}
+                      occupiedDetails={schedule.occupied_details ?? []}
+                      fare={fare.trim() || "0"}
+                      seatFares={previewSeatFares}
+                      selected={[]}
+                      onSelect={focusSeatRow}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-amber-800 dark:text-amber-200/90">
+                Bus layout isn&apos;t available in the expected format — use the table below. If this persists,
+                re-save the bus layout from the operator bus editor.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -355,7 +496,10 @@ export default function EditSchedulePricingPage() {
                   const b = fare.trim() || "0";
                   setSeatFareInputs((prev) => {
                     const n = { ...prev };
-                    for (const lb of bookableSeatLabels) n[lb] = b;
+                    for (const lb of bookableSeatLabels) {
+                      if (occupiedSeatSet.has(lb)) continue;
+                      n[lb] = b;
+                    }
                     return n;
                   });
                 }}
@@ -372,21 +516,43 @@ export default function EditSchedulePricingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {bookableSeatLabels.map((lb) => (
-                    <tr key={lb} className="border-t border-slate-100 dark:border-slate-800">
-                      <td className="p-2 font-mono text-xs">{lb}</td>
-                      <td className="p-2">
-                        <Input
-                          className="h-8 max-w-[120px]"
-                          value={seatFareInputs[lb] ?? ""}
-                          onChange={(e) =>
-                            setSeatFareInputs((prev) => ({ ...prev, [lb]: e.target.value }))
-                          }
-                          inputMode="decimal"
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {bookableSeatLabels.map((lb) => {
+                    const isBooked = occupiedSeatSet.has(lb);
+                    const g = schedule.occupied_details?.find((o) => o.label === lb)?.gender;
+                    const genderHint =
+                      g === "F" || g === "FEMALE" ? "Female" : g === "M" || g === "MALE" ? "Male" : null;
+                    return (
+                      <tr
+                        key={lb}
+                        data-operator-seat-row={lb}
+                        className={cn(
+                          "border-t border-slate-100 scroll-mt-20 dark:border-slate-800",
+                          isBooked && "bg-slate-100/80 dark:bg-slate-800/50",
+                        )}
+                      >
+                        <td className="p-2 font-mono text-xs">
+                          {lb}
+                          {isBooked ? (
+                            <span className="ml-2 inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-normal text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                              Booked{genderHint ? ` · ${genderHint}` : ""}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="p-2">
+                          <Input
+                            className="h-8 max-w-[120px]"
+                            value={seatFareInputs[lb] ?? ""}
+                            onChange={(e) =>
+                              setSeatFareInputs((prev) => ({ ...prev, [lb]: e.target.value }))
+                            }
+                            inputMode="decimal"
+                            disabled={isBooked}
+                            title={isBooked ? "Price is fixed while this seat is booked or held" : undefined}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -451,7 +617,11 @@ export default function EditSchedulePricingPage() {
 
       <div className="flex flex-wrap gap-3">
         <Button type="button" size="lg" disabled={saving} onClick={handleSave} className="min-w-[200px]">
-          {saving ? "Saving…" : fareLocked ? "Save offer display" : "Save & go live"}
+          {saving
+            ? "Saving…"
+            : fareLocked
+              ? "Save offers & seat prices"
+              : "Save & go live"}
         </Button>
         <Button type="button" variant="outline" asChild>
           <Link href="/operator/schedules">Cancel</Link>
@@ -459,7 +629,7 @@ export default function EditSchedulePricingPage() {
       </div>
       <p className="text-xs text-slate-500">
         {fareLocked
-          ? "Offer text and style save to this trip immediately for active schedules."
+          ? "Saves offer display and per-seat prices for empty seats. Base fare and MRP stay fixed while there are confirmed bookings."
           : '"Go live" saves pricing and offers to this trip. Active trips update for passengers immediately; pending trips show new pricing after approval.'}
       </p>
     </div>

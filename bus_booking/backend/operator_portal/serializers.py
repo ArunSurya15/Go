@@ -4,8 +4,9 @@ from buses.models import Bus, Operator
 from common.models import Route, RoutePattern
 from decimal import Decimal
 
-from bookings.models import Schedule, BoardingPoint, DroppingPoint
+from bookings.models import Schedule, BoardingPoint, DroppingPoint, Booking, OperatorSale
 from bookings.pricing import seat_fares_dict_from_schedule
+from bookings.seat_rules import get_occupied_and_seat_genders
 from buses.constants import VALID_FEATURE_IDS
 
 OPERATOR_OFFER_STYLES = frozenset(
@@ -184,6 +185,8 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
     fare_editable = serializers.SerializerMethodField()
     confirmed_bookings_count = serializers.SerializerMethodField()
     seat_fares = serializers.SerializerMethodField()
+    occupied_seats = serializers.SerializerMethodField()
+    occupied_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Schedule
@@ -205,6 +208,8 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
             "dropping_points",
             "fare_editable",
             "confirmed_bookings_count",
+            "occupied_seats",
+            "occupied_details",
         )
         read_only_fields = (
             "status",
@@ -212,6 +217,8 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
             "fare_editable",
             "confirmed_bookings_count",
             "seat_fares",
+            "occupied_seats",
+            "occupied_details",
         )
 
     def get_fare_editable(self, obj):
@@ -226,6 +233,50 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
 
     def get_seat_fares(self, obj):
         return seat_fares_dict_from_schedule(obj)
+
+    def get_occupied_seats(self, obj):
+        if not getattr(obj, "pk", None):
+            return []
+        occupied, _ = get_occupied_and_seat_genders(obj)
+        return sorted(occupied)
+
+    def get_occupied_details(self, obj):
+        if not getattr(obj, "pk", None):
+            return []
+        occupied, seat_gender = get_occupied_and_seat_genders(obj)
+        return [{"label": s, "gender": seat_gender.get(s)} for s in sorted(occupied)]
+
+    @staticmethod
+    def _effective_seat_price(schedule, label: str) -> Decimal:
+        ov = seat_fares_dict_from_schedule(schedule)
+        if label in ov:
+            return Decimal(str(ov[label])).quantize(Decimal("0.01"))
+        return Decimal(str(schedule.fare)).quantize(Decimal("0.01"))
+
+    def _assert_occupied_seat_prices_unchanged(self, instance, validated_data, request):
+        occupied, _ = get_occupied_and_seat_genders(instance)
+        if not occupied:
+            return
+        new_base = Decimal(str(validated_data.get("fare", instance.fare))).quantize(Decimal("0.01"))
+        if request and "seat_fares" in getattr(request, "data", {}):
+            new_ov = self._validate_seat_fares_dict(request.data.get("seat_fares"))
+        else:
+            new_ov = seat_fares_dict_from_schedule(instance)
+        for label in occupied:
+            old_eff = self._effective_seat_price(instance, label)
+            new_eff = (
+                Decimal(str(new_ov[label])).quantize(Decimal("0.01"))
+                if label in new_ov
+                else new_base
+            )
+            if old_eff != new_eff:
+                raise serializers.ValidationError(
+                    {
+                        "seat_fares": (
+                            f"Price for booked seat {label} cannot change while seats are booked or held."
+                        )
+                    }
+                )
 
     def validate_operator_offer_style(self, value):
         v = (value or "").strip()
@@ -336,17 +387,22 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         request = self.context.get("request")
         confirmed = instance.bookings.filter(status="CONFIRMED").exists()
-        if confirmed and (
-            not self._fare_unchanged(instance, validated_data)
-            or not self._seat_fares_unchanged(instance, request)
-        ):
+        # Confirmed bookings lock base fare (selling + MRP) only. Per-seat overrides for *unbooked*
+        # seats can still change; booked/hold seats are protected by _assert_occupied_seat_prices_unchanged.
+        if confirmed and not self._fare_unchanged(instance, validated_data):
             raise serializers.ValidationError(
                 {
                     "non_field_errors": [
-                        "Cannot change selling fare, MRP, or per-seat prices: this trip already has confirmed bookings."
+                        "Cannot change selling fare or MRP: this trip already has confirmed bookings. "
+                        "You can still adjust per-seat prices for seats that are not booked."
                     ]
                 }
             )
+        if request and (
+            "fare" in validated_data
+            or "seat_fares" in getattr(request, "data", {})
+        ):
+            self._assert_occupied_seat_prices_unchanged(instance, validated_data, request)
         if request and "seat_fares" in getattr(request, "data", {}):
             validated_data["seat_fares_json"] = json.dumps(
                 self._validate_seat_fares_dict(request.data.get("seat_fares"))
@@ -363,3 +419,120 @@ class OperatorScheduleSerializer(serializers.ModelSerializer):
             for dp in dropping_points:
                 DroppingPoint.objects.create(schedule=instance, **dp)
         return schedule
+
+
+class OperatorBookingManifestSerializer(serializers.ModelSerializer):
+    """Operator-facing booking row: PNR, seats, passengers, contact, payment."""
+
+    pnr = serializers.SerializerMethodField()
+    seats = serializers.SerializerMethodField()
+    passengers = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
+    gateway_order_id = serializers.SerializerMethodField()
+    booker_email = serializers.SerializerMethodField()
+    booker_phone = serializers.SerializerMethodField()
+    schedule = serializers.SerializerMethodField()
+    boarding_point_name = serializers.SerializerMethodField()
+    dropping_point_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Booking
+        fields = (
+            "id",
+            "pnr",
+            "seats",
+            "passengers",
+            "amount",
+            "status",
+            "contact_phone",
+            "booker_email",
+            "booker_phone",
+            "payment_status",
+            "gateway_order_id",
+            "boarding_point_name",
+            "dropping_point_name",
+            "schedule",
+            "created_at",
+        )
+
+    def get_pnr(self, obj):
+        from .booking_manifest import booking_pnr
+
+        return booking_pnr(obj.id)
+
+    def get_seats(self, obj):
+        try:
+            return json.loads(obj.seats or "[]")
+        except Exception:
+            return []
+
+    def get_passengers(self, obj):
+        from .booking_manifest import passenger_rows_from_booking
+
+        return passenger_rows_from_booking(obj)
+
+    def get_payment_status(self, obj):
+        from .booking_manifest import payment_status_for_booking
+
+        st, _ = payment_status_for_booking(obj)
+        return st
+
+    def get_gateway_order_id(self, obj):
+        from .booking_manifest import payment_status_for_booking
+
+        _, oid = payment_status_for_booking(obj)
+        return oid
+
+    def get_booker_email(self, obj):
+        return (obj.user.email or "").strip() if obj.user_id else ""
+
+    def get_booker_phone(self, obj):
+        if not obj.user_id:
+            return ""
+        return (getattr(obj.user, "phone", None) or "").strip()
+
+    def get_boarding_point_name(self, obj):
+        return obj.boarding_point.location_name if obj.boarding_point_id else ""
+
+    def get_dropping_point_name(self, obj):
+        return obj.dropping_point.location_name if obj.dropping_point_id else ""
+
+    def get_schedule(self, obj):
+        s = obj.schedule
+        return {
+            "id": s.id,
+            "origin": s.route.origin,
+            "destination": s.route.destination,
+            "departure_dt": s.departure_dt.isoformat() if s.departure_dt else None,
+        }
+
+
+class OperatorSaleSerializer(serializers.ModelSerializer):
+    """Read-only sale lines for operator reporting (from OperatorSale)."""
+
+    pnr = serializers.SerializerMethodField()
+    booking_id = serializers.IntegerField(source="booking.id", read_only=True)
+    origin = serializers.CharField(source="schedule.route.origin", read_only=True)
+    destination = serializers.CharField(source="schedule.route.destination", read_only=True)
+    departure_dt = serializers.DateTimeField(source="schedule.departure_dt", read_only=True)
+
+    class Meta:
+        model = OperatorSale
+        fields = (
+            "id",
+            "booking_id",
+            "pnr",
+            "origin",
+            "destination",
+            "departure_dt",
+            "gross_amount",
+            "seat_count",
+            "currency",
+            "confirmed_at",
+            "reversal_status",
+        )
+
+    def get_pnr(self, obj):
+        from .booking_manifest import booking_pnr
+
+        return booking_pnr(obj.booking_id)

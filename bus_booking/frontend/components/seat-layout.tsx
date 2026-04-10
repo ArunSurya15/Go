@@ -28,6 +28,10 @@ type SeatLayoutProps = {
   onSelect: (seat: string) => void;
   /** Called when user selects (clicks to add) an available female-only seat */
   onFemaleOnlySeatClick?: (seat: string) => void;
+  /** Hide the passenger legend (symbols / booked vs available). Use for operator pricing preview. */
+  hideLegend?: boolean;
+  /** Show seat label (e.g. L1, U5) under the icon — useful for operator pricing preview. */
+  showSeatLabels?: boolean;
 };
 
 /**
@@ -600,6 +604,7 @@ function DeckGrid({
   topSpacerRow,
   deckType = "lower",
   rowGapPx,
+  showSeatLabels = false,
 }: {
   rows: CellInfo[][];
   occupiedSet: Set<string>;
@@ -615,6 +620,7 @@ function DeckGrid({
   deckType?: "lower" | "upper";
   /** Override vertical gap between rows (e.g. sync seater deck height to sleeper deck) */
   rowGapPx?: number;
+  showSeatLabels?: boolean;
 }) {
   const cols = rows[0]?.length ?? 0;
   const numRows = rows.length;
@@ -773,6 +779,11 @@ function DeckGrid({
                   Sold
                 </span>
               )}
+              {isAvailable && showSeatLabels ? (
+                <span className="max-w-full truncate text-center text-[9px] font-semibold leading-none text-slate-600 dark:text-slate-300">
+                  {label}
+                </span>
+              ) : null}
               {isAvailable && (
                 <span className="text-[10px] leading-none shrink-0 text-gray-500 dark:text-gray-400">
                   ₹{priceForLabel(label)}
@@ -929,6 +940,8 @@ export function SeatLayout({
   selected,
   onSelect,
   onFemaleOnlySeatClick,
+  hideLegend = false,
+  showSeatLabels = false,
 }: SeatLayoutProps) {
   const occupiedSet = useMemo(() => new Set(occupied), [occupied]);
   
@@ -982,7 +995,7 @@ export function SeatLayout({
   return (
     <div className="flex flex-col items-center w-full max-w-4xl mx-auto">
       {/* Legend */}
-      <SeatTypesLegend />
+      {!hideLegend ? <SeatTypesLegend /> : null}
       
       {/* Decks: width hugs seat grid (tight sides); equal card height; row gaps sync vertical span */}
       <div
@@ -1022,6 +1035,7 @@ export function SeatLayout({
               topSpacerRow
               deckType="lower"
               rowGapPx={lowerRowGapPx}
+              showSeatLabels={showSeatLabels}
             />
           </div>
         </div>
@@ -1055,6 +1069,7 @@ export function SeatLayout({
                 topSpacerRow
                 deckType="upper"
                 rowGapPx={upperRowGapPx}
+                showSeatLabels={showSeatLabels}
               />
             </div>
           </div>

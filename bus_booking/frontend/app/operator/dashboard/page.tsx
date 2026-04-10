@@ -25,10 +25,18 @@ export default function OperatorDashboardPage() {
         return;
       }
       try {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = String(today.getMonth() + 1).padStart(2, "0");
+        const d = String(today.getDate()).padStart(2, "0");
+        const dateFrom = `${y}-${m}-${d}`;
+        const end = new Date(today);
+        end.setDate(end.getDate() + 365);
+        const dateTo = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
         const [p, b, s] = await Promise.all([
           operatorApi.profile(token),
           operatorApi.buses(token),
-          operatorApi.schedules(token),
+          operatorApi.schedules(token, { date_from: dateFrom, date_to: dateTo }),
         ]);
         if (!cancelled) {
           setProfile(p);
@@ -98,7 +106,9 @@ export default function OperatorDashboardPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>My schedules</CardTitle>
-              <CardDescription>{schedules.length} schedule{schedules.length !== 1 ? "s" : ""}</CardDescription>
+              <CardDescription>
+                {schedules.length} departure{schedules.length !== 1 ? "s" : ""} in the next 12 months (not all time)
+              </CardDescription>
             </div>
             <span className="text-3xl font-bold text-indigo-600">{schedules.length}</span>
           </CardHeader>
@@ -153,6 +163,9 @@ export default function OperatorDashboardPage() {
           <ul className="mt-2 space-y-1 text-sm">
             <li>
               <Link href="/operator/buses/new" className="text-indigo-600 hover:underline">Add bus</Link>
+            </li>
+            <li>
+              <Link href="/operator/sales" className="text-indigo-600 hover:underline">Sales (revenue &amp; history)</Link>
             </li>
             <li>
               <Link href="/operator/schedules" className="text-indigo-600 hover:underline">Schedules — pricing &amp; offers</Link>

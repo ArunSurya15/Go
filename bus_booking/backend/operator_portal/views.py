@@ -1,17 +1,28 @@
 from rest_framework import generics
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db.models import Prefetch
+from datetime import date
+
+from django.db.models import Count, Prefetch, Sum
 
 from buses.models import Bus, Operator
-from bookings.models import Schedule, ScheduleLocation
+
+from bookings.models import Booking, OperatorSale, Schedule, ScheduleLocation
 from common.models import Route, RoutePattern, RoutePatternStop
 from common.serializers import RoutePatternSerializer
 
+from .booking_manifest import build_csv_response, build_pdf_response
 from .permissions import IsOperator
-from .serializers import OperatorBusSerializer, OperatorScheduleSerializer, OperatorProfileSerializer
+from .serializers import (
+    OperatorBookingManifestSerializer,
+    OperatorBusSerializer,
+    OperatorScheduleSerializer,
+    OperatorProfileSerializer,
+    OperatorSaleSerializer,
+)
 
 
 def get_operator(request):
@@ -49,15 +60,42 @@ class BusDetailView(generics.RetrieveUpdateAPIView):
 
 
 class ScheduleListCreateView(generics.ListCreateAPIView):
-    """List schedules for the operator's buses; create a schedule (bus must belong to operator)."""
+    """List schedules for the operator's buses; create a schedule (bus must belong to operator).
+
+    Extra: GET ?export=csv|pdf&date=YYYY-MM-DD  →  day booking manifest download (no new URL needed).
+    """
     permission_classes = [IsAuthenticated, IsOperator]
     serializer_class = OperatorScheduleSerializer
+
+    def list(self, request, *args, **kwargs):
+        export_fmt = (request.query_params.get("export") or "").strip().lower()
+        if export_fmt in ("csv", "pdf"):
+            day_raw = (request.query_params.get("date") or "").strip()
+            if not day_raw:
+                return Response({"detail": "date (YYYY-MM-DD) is required for export."}, status=400)
+            try:
+                d = date.fromisoformat(day_raw)
+            except ValueError:
+                return Response({"detail": "Invalid date. Use YYYY-MM-DD."}, status=400)
+            op = get_operator(request)
+            if not op:
+                return Response({"detail": "Operator access required."}, status=403)
+            sched_ids = Schedule.objects.filter(bus__operator=op, departure_dt__date=d).values_list("id", flat=True)
+            bookings = Booking.objects.filter(schedule_id__in=sched_ids).select_related(
+                "user", "payment", "schedule", "schedule__route", "boarding_point", "dropping_point"
+            ).order_by("schedule__departure_dt", "id")
+            title = f"Manifest — all trips — {d.isoformat()}"
+            fname = f"manifest-day-{d.isoformat()}.{export_fmt}"
+            if export_fmt == "csv":
+                return build_csv_response(bookings, fname, True)
+            return build_pdf_response(bookings, title, fname, True)
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         op = get_operator(self.request)
         if not op:
             return Schedule.objects.none()
-        return (
+        qs = (
             Schedule.objects.filter(bus__operator=op)
             .select_related("bus", "route", "route_pattern")
             .prefetch_related(
@@ -68,9 +106,21 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
                 "boarding_points",
                 "dropping_points",
                 "bookings",
+                "reservations",
             )
-            .order_by("-departure_dt")
         )
+        params = self.request.query_params
+        df = (params.get("date_from") or "").strip()
+        dt = (params.get("date_to") or "").strip()
+        if df or dt:
+            try:
+                if df:
+                    qs = qs.filter(departure_dt__date__gte=date.fromisoformat(df))
+                if dt:
+                    qs = qs.filter(departure_dt__date__lte=date.fromisoformat(dt))
+            except ValueError:
+                pass
+        return qs.order_by("-departure_dt")
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -133,6 +183,7 @@ class ScheduleDetailView(generics.RetrieveUpdateAPIView):
                 "boarding_points",
                 "dropping_points",
                 "bookings",
+                "reservations",
             )
         )
 
@@ -166,3 +217,160 @@ class ScheduleLocationView(APIView):
         except (TypeError, ValueError):
             return Response({"detail": "Invalid lat/lng."}, status=400)
         return Response({"detail": "Location recorded."}, status=201)
+
+
+class OperatorScheduleBookingsListView(generics.ListAPIView):
+    """GET: bookings for a schedule (manifest) — operator must own the bus."""
+
+    permission_classes = [IsAuthenticated, IsOperator]
+    serializer_class = OperatorBookingManifestSerializer
+
+    def get_queryset(self):
+        op = get_operator(self.request)
+        schedule_id = self.kwargs["schedule_id"]
+        if not op:
+            return Booking.objects.none()
+        if not Schedule.objects.filter(pk=schedule_id, bus__operator=op).exists():
+            raise NotFound("Schedule not found.")
+        return (
+            Booking.objects.filter(schedule_id=schedule_id)
+            .select_related(
+                "user",
+                "payment",
+                "schedule",
+                "schedule__route",
+                "boarding_point",
+                "dropping_point",
+            )
+            .order_by("-created_at")
+        )
+
+
+class OperatorBookingsExportView(APIView):
+    """GET: CSV or PDF manifest. Provide exactly one of `schedule_id` or `date` (YYYY-MM-DD).
+
+    Prefer URL path ``/api/operator/schedules/<id>/bookings/export/?format=csv`` (same prefix as
+    the bookings list) so routing always hits this view. Legacy: ``/api/operator/bookings/export/?schedule_id=``.
+    """
+
+    permission_classes = [IsAuthenticated, IsOperator]
+
+    def get(self, request, *args, **kwargs):
+        op = get_operator(request)
+        if not op:
+            return Response({"detail": "Operator access required."}, status=403)
+
+        fmt = (request.query_params.get("format") or "csv").strip().lower()
+        path_sid = kwargs.get("schedule_id")
+        if path_sid is not None:
+            schedule_raw = str(path_sid).strip()
+            day_raw = ""
+        else:
+            schedule_raw = (request.query_params.get("schedule_id") or "").strip()
+            day_raw = (request.query_params.get("date") or "").strip()
+
+        if bool(schedule_raw) == bool(day_raw):
+            return Response(
+                {"detail": "Provide exactly one of schedule_id or date."},
+                status=400,
+            )
+
+        base_qs = Booking.objects.select_related(
+            "user",
+            "payment",
+            "schedule",
+            "schedule__route",
+            "boarding_point",
+            "dropping_point",
+        )
+
+        if schedule_raw:
+            try:
+                sid = int(schedule_raw)
+            except ValueError:
+                return Response({"detail": "Invalid schedule_id."}, status=400)
+            sched = Schedule.objects.filter(pk=sid, bus__operator=op).select_related("route").first()
+            if not sched:
+                return Response({"detail": "Schedule not found."}, status=404)
+            bookings = base_qs.filter(schedule_id=sid).order_by("id")
+            title = (
+                f"Manifest — {sched.route.origin} → {sched.route.destination} — "
+                f"{sched.departure_dt:%Y-%m-%d %H:%M}"
+            )
+            fname = f"manifest-schedule-{sid}.{fmt}"
+            include_schedule = False
+        else:
+            try:
+                d = date.fromisoformat(day_raw)
+            except ValueError:
+                return Response({"detail": "Invalid date. Use YYYY-MM-DD."}, status=400)
+            sched_ids = Schedule.objects.filter(bus__operator=op, departure_dt__date=d).values_list(
+                "id", flat=True
+            )
+            bookings = base_qs.filter(schedule_id__in=sched_ids).order_by(
+                "schedule__departure_dt", "id"
+            )
+            title = f"Manifest — all trips — {d.isoformat()}"
+            fname = f"manifest-day-{d.isoformat()}.{fmt}"
+            include_schedule = True
+
+        if fmt == "csv":
+            return build_csv_response(bookings, fname, include_schedule)
+        if fmt == "pdf":
+            return build_pdf_response(bookings, title, fname, include_schedule)
+        return Response({"detail": "format must be csv or pdf."}, status=400)
+
+
+class OperatorSalesListView(generics.ListAPIView):
+    """
+    GET: sale lines derived from confirmed bookings (`OperatorSale`).
+    Query: date_from, date_to (ISO date, filter on `confirmed_at`), active_only (1/true = exclude refunds/cancels).
+    """
+
+    permission_classes = [IsAuthenticated, IsOperator]
+    serializer_class = OperatorSaleSerializer
+
+    def get_queryset(self):
+        op = get_operator(self.request)
+        if not op:
+            return OperatorSale.objects.none()
+        qs = OperatorSale.objects.filter(operator=op).select_related(
+            "booking", "schedule", "schedule__route"
+        )
+        params = self.request.query_params
+        df = (params.get("date_from") or "").strip()
+        dt = (params.get("date_to") or "").strip()
+        if df:
+            try:
+                qs = qs.filter(confirmed_at__date__gte=date.fromisoformat(df))
+            except ValueError:
+                pass
+        if dt:
+            try:
+                qs = qs.filter(confirmed_at__date__lte=date.fromisoformat(dt))
+            except ValueError:
+                pass
+        active_only = (params.get("active_only") or "").strip().lower() in ("1", "true", "yes")
+        if active_only:
+            qs = qs.filter(reversal_status="")
+        return qs.order_by("-confirmed_at", "-id")
+
+    def list(self, request, *args, **kwargs):
+        qs = self.filter_queryset(self.get_queryset())
+        active_subset = qs.filter(reversal_status="")
+        agg = active_subset.aggregate(
+            total=Sum("gross_amount"),
+            n=Count("id"),
+            seats=Sum("seat_count"),
+        )
+        ser = self.get_serializer(qs, many=True)
+        return Response(
+            {
+                "summary": {
+                    "active_booking_count": agg["n"] or 0,
+                    "gross_amount": str(agg["total"] or 0),
+                    "seat_count": int(agg["seats"] or 0),
+                },
+                "results": ser.data,
+            }
+        )
