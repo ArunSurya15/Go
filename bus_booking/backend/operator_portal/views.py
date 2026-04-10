@@ -84,7 +84,8 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
             bookings = Booking.objects.filter(schedule_id__in=sched_ids).select_related(
                 "user", "payment", "schedule", "schedule__route", "boarding_point", "dropping_point"
             ).order_by("schedule__departure_dt", "id")
-            title = f"Manifest — all trips — {d.isoformat()}"
+            op_name = op.name or "Operator"
+            title = f"{op_name} · All trips · {d.strftime('%d %b %Y')}"
             fname = f"manifest-day-{d.isoformat()}.{export_fmt}"
             if export_fmt == "csv":
                 return build_csv_response(bookings, fname, True)
@@ -164,9 +165,41 @@ class OperatorProfileView(generics.RetrieveUpdateAPIView):
 
 
 class ScheduleDetailView(generics.RetrieveUpdateAPIView):
-    """Retrieve or update a schedule (only if bus belongs to the operator)."""
+    """Retrieve or update a schedule (only if bus belongs to the operator).
+
+    GET ?export=csv|pdf  →  single-trip booking manifest (same URL as schedule detail; avoids 404 on separate export path).
+    """
+
     permission_classes = [IsAuthenticated, IsOperator]
     serializer_class = OperatorScheduleSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        export_fmt = (request.query_params.get("export") or "").strip().lower()
+        if export_fmt in ("csv", "pdf"):
+            schedule = self.get_object()
+            op = get_operator(request)
+            op_name = (op.name if op else None) or "Operator"
+            bookings = (
+                Booking.objects.filter(schedule_id=schedule.pk)
+                .select_related(
+                    "user",
+                    "payment",
+                    "schedule",
+                    "schedule__route",
+                    "boarding_point",
+                    "dropping_point",
+                )
+                .order_by("id")
+            )
+            title = (
+                f"{op_name} · {schedule.route.origin} → {schedule.route.destination} · "
+                f"{schedule.departure_dt:%d %b %Y %H:%M}"
+            )
+            fname = f"manifest-schedule-{schedule.pk}.{export_fmt}"
+            if export_fmt == "csv":
+                return build_csv_response(bookings, fname, False)
+            return build_pdf_response(bookings, title, fname, False)
+        return super().retrieve(request, *args, **kwargs)
 
     def get_queryset(self):
         op = get_operator(self.request)
@@ -293,9 +326,10 @@ class OperatorBookingsExportView(APIView):
             if not sched:
                 return Response({"detail": "Schedule not found."}, status=404)
             bookings = base_qs.filter(schedule_id=sid).order_by("id")
+            op_name = op.name or "Operator"
             title = (
-                f"Manifest — {sched.route.origin} → {sched.route.destination} — "
-                f"{sched.departure_dt:%Y-%m-%d %H:%M}"
+                f"{op_name} · {sched.route.origin} → {sched.route.destination} · "
+                f"{sched.departure_dt:%d %b %Y %H:%M}"
             )
             fname = f"manifest-schedule-{sid}.{fmt}"
             include_schedule = False
@@ -310,7 +344,8 @@ class OperatorBookingsExportView(APIView):
             bookings = base_qs.filter(schedule_id__in=sched_ids).order_by(
                 "schedule__departure_dt", "id"
             )
-            title = f"Manifest — all trips — {d.isoformat()}"
+            op_name = op.name or "Operator"
+            title = f"{op_name} · All trips · {d.strftime('%d %b %Y')}"
             fname = f"manifest-day-{d.isoformat()}.{fmt}"
             include_schedule = True
 
