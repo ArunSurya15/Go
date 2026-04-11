@@ -34,9 +34,12 @@ export default function PaymentPage() {
     boarding_point_id?: number;
     dropping_point_id?: number;
     contact_phone?: string;
+    email?: string;
     state_of_residence?: string;
     whatsapp_opt_in?: boolean;
     passengers?: Record<string, { name?: string; age?: string; gender?: string }>;
+    order_id?: string;
+    booking_id?: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

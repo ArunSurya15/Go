@@ -7,20 +7,27 @@ notification never breaks the booking flow.
 Enable by setting keys in .env (see settings.py for variable names):
   Email:     RESEND_API_KEY, EMAIL_FROM, APP_BASE_URL
   WhatsApp:  WHATSAPP_PROVIDER=twilio|meta  + provider-specific keys
+  SMS:       SMS_PROVIDER + keys (same as booking confirmations)
+
+Operator alerts (KYC cleared/rejected, schedule approved/rejected, trips going live) use the same
+channels. Recipients are parsed from operator contact_info (phone, email, alternates) and linked
+OPERATOR users. WhatsApp is sent without a separate opt-in (transactional service update).
 """
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import urllib.request
 import urllib.parse
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable, Set, Tuple
 
+from django.apps import apps
 from django.conf import settings
 
 if TYPE_CHECKING:
-    from .models import Booking
+    from .models import Booking, Schedule
 
 logger = logging.getLogger(__name__)
 
@@ -373,3 +380,323 @@ def notify_booking_confirmed(booking: "Booking") -> None:
     send_booking_confirmation_email(booking)
     send_booking_confirmation_sms(booking)
     send_booking_confirmation_whatsapp(booking)
+
+
+# ─── Operator alerts (KYC / schedules) — email + SMS + WhatsApp ─────────────
+
+def _operator_portal_url() -> str:
+    return f"{_get('APP_BASE_URL', 'http://localhost:3000').rstrip('/')}/operator/dashboard"
+
+
+def _operator_contact_dict(contact_info: str) -> dict:
+    raw = (contact_info or "").strip()
+    if not raw:
+        return {}
+    try:
+        d = json.loads(raw)
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _kyc_cleared_status(value: str) -> bool:
+    return (value or "").strip().upper() in frozenset({"VERIFIED", "APPROVED"})
+
+
+def collect_operator_recipients(operator) -> Tuple[Set[str], Set[str]]:
+    """
+    Emails and phone numbers to notify for an operator.
+    Uses contact_info JSON (phone, email, alternates) and linked OPERATOR users.
+    """
+    emails: Set[str] = set()
+    phones: Set[str] = set()
+    d = _operator_contact_dict(getattr(operator, "contact_info", "") or "")
+    for key in ("email", "alternate_email"):
+        em = d.get(key)
+        if em and isinstance(em, str) and "@" in em.strip():
+            emails.add(em.strip().lower())
+    for key in ("phone", "alternate_phone"):
+        ph = d.get(key)
+        if ph and str(ph).strip():
+            phones.add(str(ph).strip())
+    User = apps.get_model("users", "User")
+    for u in User.objects.filter(operator_id=operator.id, role="OPERATOR").only("email", "phone"):
+        if u.email and str(u.email).strip():
+            emails.add(str(u.email).strip().lower())
+        if u.phone and str(u.phone).strip():
+            phones.add(str(u.phone).strip())
+    return emails, phones
+
+
+def _phones_for_sms_whatsapp(phones: Iterable[str]) -> list:
+    from users.otp import normalize_phone
+
+    out = []
+    seen = set()
+    for raw in phones:
+        p = normalize_phone(raw)
+        if len(p) >= 12 and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def send_operator_whatsapp(phone: str, message: str) -> bool:
+    """Transactional WhatsApp to operator (no passenger opt-in). Returns True if sent."""
+    provider = _get("WHATSAPP_PROVIDER").lower()
+    if not provider:
+        logger.debug("WHATSAPP_PROVIDER not set — skipping operator WhatsApp")
+        return False
+    if provider == "twilio":
+        return _send_via_twilio(phone, message)
+    if provider == "meta":
+        return _send_via_meta(phone, message)
+    logger.warning("Unknown WHATSAPP_PROVIDER=%s", provider)
+    return False
+
+
+def _broadcast_operator_sms(phones: list, body: str) -> None:
+    from users.otp import send_sms
+
+    for phone in phones:
+        try:
+            if send_sms(phone, body):
+                logger.info("Operator SMS sent to %s", phone)
+        except Exception as e:
+            logger.error("Operator SMS failed to %s: %s", phone, e)
+
+
+def _broadcast_operator_whatsapp(phones: list, body: str) -> None:
+    for phone in phones:
+        try:
+            if send_operator_whatsapp(phone, body):
+                logger.info("Operator WhatsApp sent to %s", phone)
+        except Exception as e:
+            logger.error("Operator WhatsApp failed to %s: %s", phone, e)
+
+
+def _broadcast_operator_email(emails: Set[str], subject: str, html: str) -> None:
+    for to in emails:
+        try:
+            if _resend_send(to, subject, html):
+                logger.info("Operator email sent to %s", to)
+        except Exception as e:
+            logger.error("Operator email failed to %s: %s", to, e)
+
+
+def notify_operator_clarification_request(
+    operator,
+    subject: str,
+    body_plain: str,
+    *,
+    admin_username: str = "",
+) -> None:
+    """
+    Admin asks operator for more KYC / business information (email + short SMS + WhatsApp).
+    Never raises.
+    """
+    try:
+        name = (operator.name or "Operator").strip()
+        emails, phones = collect_operator_recipients(operator)
+        phones_norm = _phones_for_sms_whatsapp(phones)
+        portal = _operator_portal_url()
+        body_html = (
+            f"<p style='color:#374151;font-size:15px'>Hello,</p>"
+            f"<div style='color:#1f2937;font-size:15px;line-height:1.6'>"
+            f"{html.escape(body_plain).replace(chr(10), '<br>')}</div>"
+            f"<p style='margin-top:20px'><a href='{html.escape(portal)}' style='color:#4f46e5'>Open operator dashboard</a></p>"
+        )
+        if admin_username:
+            body_html += f"<p style='color:#9ca3af;font-size:12px'>Message from e-GO admin ({html.escape(admin_username)}).</p>"
+        full_html = f"""
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:10px;padding:28px">
+  <h1 style="color:#4f46e5;margin:0 0 12px;font-size:18px">{html.escape(subject)}</h1>
+  {body_html}
+  <p style="color:#9ca3af;font-size:12px;margin-top:24px">— e-GO</p>
+</div></body></html>"""
+        _broadcast_operator_email(emails, f"e-GO: {subject}", full_html)
+        sms = f"e-GO: {subject[:80]}. Check email for details. {portal}"
+        wa = f"📩 *e-GO — KYC / account*\n*{subject}*\n\n{body_plain[:900]}\n\n{portal}"
+        _broadcast_operator_sms(phones_norm, sms[:480])
+        _broadcast_operator_whatsapp(phones_norm, wa[:1600])
+    except Exception as e:
+        logger.error("notify_operator_clarification_request failed: %s", e)
+
+
+def notify_operator_kyc_changed(operator, old_status: str, new_status: str) -> None:
+    """
+    After admin changes operator KYC: notify on approval (→ VERIFIED/APPROVED) or rejection (→ REJECTED).
+    Fire-and-forget; never raises.
+    """
+    try:
+        old = (old_status or "").strip().upper()
+        new = (new_status or "").strip().upper()
+        if old == new:
+            return
+        emails, phones = collect_operator_recipients(operator)
+        phones_norm = _phones_for_sms_whatsapp(phones)
+        name = (operator.name or "Operator").strip()
+        portal = _operator_portal_url()
+
+        if _kyc_cleared_status(new) and not _kyc_cleared_status(old):
+            subject = f"e-GO: KYC verified — {name}"
+            html = f"""
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;padding:28px">
+  <h1 style="color:#16a34a;margin:0 0 12px;font-size:20px">KYC verified</h1>
+  <p style="color:#374151;font-size:15px">Hello,</p>
+  <p style="color:#374151;font-size:15px">Your operator account <strong>{name}</strong> has been verified on e-GO.
+  New trips you add can go live immediately without waiting in the admin approval queue.</p>
+  <p><a href="{portal}" style="color:#4f46e5">Open operator dashboard</a></p>
+  <p style="color:#9ca3af;font-size:12px;margin-top:24px">— e-GO</p>
+</div></body></html>"""
+            sms = (
+                f"e-GO: KYC verified for {name}. New schedules can go live. Dashboard: {portal}"
+            )
+            wa = (
+                f"✅ *KYC verified*\n\n"
+                f"Operator: *{name}*\n"
+                f"Your account is cleared on e-GO. New trips can publish as live immediately.\n"
+                f"Dashboard: {portal}"
+            )
+            _broadcast_operator_email(emails, subject, html)
+            _broadcast_operator_sms(phones_norm, sms)
+            _broadcast_operator_whatsapp(phones_norm, wa)
+
+        elif new == "REJECTED" and old != "REJECTED":
+            subject = f"e-GO: KYC update — {name}"
+            html = f"""
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;padding:28px">
+  <h1 style="color:#b91c1c;margin:0 0 12px;font-size:20px">KYC not approved</h1>
+  <p style="color:#374151;font-size:15px">Hello,</p>
+  <p style="color:#374151;font-size:15px">Your operator profile <strong>{name}</strong> could not be verified yet.
+  Please review your submitted details in the operator portal or contact e-GO support.</p>
+  <p><a href="{portal}" style="color:#4f46e5">Open operator dashboard</a></p>
+  <p style="color:#9ca3af;font-size:12px;margin-top:24px">— e-GO</p>
+</div></body></html>"""
+            sms = f"e-GO: KYC not approved for {name}. Check operator portal: {portal}"
+            wa = f"⚠️ *KYC update*\n\nOperator: *{name}*\nStatus: not approved. Please check the operator portal.\n{portal}"
+            _broadcast_operator_email(emails, subject, html)
+            _broadcast_operator_sms(phones_norm, sms)
+            _broadcast_operator_whatsapp(phones_norm, wa)
+    except Exception as e:
+        logger.error("notify_operator_kyc_changed failed: %s", e)
+
+
+def notify_operator_schedule_published(schedule: "Schedule", *, source: str = "admin") -> None:
+    """
+    Trip is live (ACTIVE): admin approved or auto-published for verified operator.
+    source: 'admin' | 'auto'
+    """
+    try:
+        operator = schedule.bus.operator
+        emails, phones = collect_operator_recipients(operator)
+        phones_norm = _phones_for_sms_whatsapp(phones)
+        route = schedule.route
+        dep = _format_dt(schedule.departure_dt)
+        reg = schedule.bus.registration_no
+        label = "approved and is now live" if source == "admin" else "is now live on e-GO"
+        subject = f"e-GO: Trip live — {route.origin} → {route.destination}"
+        html = f"""
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;padding:28px">
+  <h1 style="color:#4f46e5;margin:0 0 12px;font-size:20px">Trip published</h1>
+  <p style="color:#374151;font-size:15px">Your schedule has been {label}.</p>
+  <table style="width:100%;font-size:14px;color:#374151;margin-top:12px">
+    <tr><td style="color:#6b7280">Route</td><td><strong>{route.origin} → {route.destination}</strong></td></tr>
+    <tr><td style="color:#6b7280">Departure</td><td>{dep}</td></tr>
+    <tr><td style="color:#6b7280">Bus</td><td>{reg}</td></tr>
+  </table>
+  <p style="margin-top:16px"><a href="{_operator_portal_url()}" style="color:#4f46e5">Operator dashboard</a></p>
+  <p style="color:#9ca3af;font-size:12px">— e-GO</p>
+</div></body></html>"""
+        sms = (
+            f"e-GO: Trip live {route.origin}-{route.destination} {dep} Bus {reg}. "
+            f"{_operator_portal_url()}"
+        )
+        wa = (
+            f"✅ *Trip live*\n"
+            f"{route.origin} → {route.destination}\n"
+            f"*Dep:* {dep}\n*Bus:* {reg}\n"
+            f"Dashboard: {_operator_portal_url()}"
+        )
+        _broadcast_operator_email(emails, subject, html)
+        _broadcast_operator_sms(phones_norm, sms)
+        _broadcast_operator_whatsapp(phones_norm, wa)
+    except Exception as e:
+        logger.error("notify_operator_schedule_published failed for schedule %s: %s", schedule.id, e)
+
+
+def notify_operator_bulk_schedules_published(operator, count: int, date_from, date_to) -> None:
+    """Many trips went live at once (bulk create for verified operator). One notification bundle."""
+    try:
+        if count <= 0:
+            return
+        emails, phones = collect_operator_recipients(operator)
+        phones_norm = _phones_for_sms_whatsapp(phones)
+        name = (operator.name or "Operator").strip()
+        portal = _operator_portal_url()
+        df = date_from.isoformat() if hasattr(date_from, "isoformat") else str(date_from)
+        dt = date_to.isoformat() if hasattr(date_to, "isoformat") else str(date_to)
+        subject = f"e-GO: {count} trip(s) now live — {name}"
+        html = f"""
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;padding:28px">
+  <h1 style="color:#4f46e5;margin:0 0 12px;font-size:20px">Trips published</h1>
+  <p style="color:#374151;font-size:15px"><strong>{count}</strong> new schedule(s) for <strong>{name}</strong> are live on e-GO
+  (dates {df} to {dt}).</p>
+  <p><a href="{portal}" style="color:#4f46e5">Operator dashboard</a></p>
+  <p style="color:#9ca3af;font-size:12px">— e-GO</p>
+</div></body></html>"""
+        sms = f"e-GO: {count} new trip(s) live for {name} ({df}–{dt}). {portal}"
+        wa = f"✅ *{count} trip(s) now live*\n{name}\nDates: {df} to {dt}\n{portal}"
+        _broadcast_operator_email(emails, subject, html)
+        _broadcast_operator_sms(phones_norm, sms)
+        _broadcast_operator_whatsapp(phones_norm, wa)
+    except Exception as e:
+        logger.error("notify_operator_bulk_schedules_published failed: %s", e)
+
+
+def notify_operator_schedule_rejected(schedule: "Schedule") -> None:
+    """Admin rejected a pending schedule (CANCELLED)."""
+    try:
+        operator = schedule.bus.operator
+        emails, phones = collect_operator_recipients(operator)
+        phones_norm = _phones_for_sms_whatsapp(phones)
+        route = schedule.route
+        dep = _format_dt(schedule.departure_dt)
+        reg = schedule.bus.registration_no
+        subject = f"e-GO: Trip not approved — {route.origin} → {route.destination}"
+        html = f"""
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;padding:28px">
+  <h1 style="color:#b45309;margin:0 0 12px;font-size:20px">Trip not approved</h1>
+  <p style="color:#374151;font-size:15px">A schedule you submitted was not approved and will not appear for booking.</p>
+  <table style="width:100%;font-size:14px;color:#374151;margin-top:12px">
+    <tr><td style="color:#6b7280">Route</td><td><strong>{route.origin} → {route.destination}</strong></td></tr>
+    <tr><td style="color:#6b7280">Departure</td><td>{dep}</td></tr>
+    <tr><td style="color:#6b7280">Bus</td><td>{reg}</td></tr>
+  </table>
+  <p style="margin-top:16px">Create a corrected trip from your <a href="{_operator_portal_url()}" style="color:#4f46e5">operator dashboard</a>.</p>
+  <p style="color:#9ca3af;font-size:12px">— e-GO</p>
+</div></body></html>"""
+        sms = f"e-GO: Trip not approved {route.origin}-{route.destination} {dep}. Portal: {_operator_portal_url()}"
+        wa = (
+            f"⚠️ *Trip not approved*\n"
+            f"{route.origin} → {route.destination}\n"
+            f"*Dep:* {dep}\n*Bus:* {reg}\n"
+            f"See operator portal."
+        )
+        _broadcast_operator_email(emails, subject, html)
+        _broadcast_operator_sms(phones_norm, sms)
+        _broadcast_operator_whatsapp(phones_norm, wa)
+    except Exception as e:
+        logger.error("notify_operator_schedule_rejected failed for schedule %s: %s", schedule.id, e)

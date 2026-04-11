@@ -19,7 +19,7 @@ import {
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +29,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(username, password);
+      await login(identifier, password);
       router.push("/");
       router.refresh();
     } catch (err) {
@@ -54,14 +54,14 @@ export default function LoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="username">Email or mobile number</Label>
+                <Label htmlFor="passenger-login-id">Email or mobile number</Label>
                 <Input
-                  id="username"
+                  id="passenger-login-id"
                   type="text"
                   autoComplete="username"
                   placeholder="you@example.com or 9876543210"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   required
                 />
               </div>

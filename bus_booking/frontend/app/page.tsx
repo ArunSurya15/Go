@@ -18,6 +18,9 @@ import {
   TravelHeroSun,
 } from "@/components/illustrations/animated-travel-hero";
 import { routes } from "@/lib/api";
+import { DatePickerField } from "@/components/ui/date-picker-field";
+import { addDays } from "date-fns";
+import { formatLocalYMD } from "@/lib/date-ymd";
 
 const containerVariants = {
   hidden: {},
@@ -36,8 +39,8 @@ const fadeUp = {
 
 export default function HomePage() {
   const router = useRouter();
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const tomorrowIso = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const todayIso = formatLocalYMD(new Date());
+  const tomorrowIso = formatLocalYMD(addDays(new Date(), 1));
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [date, setDate] = useState(todayIso);
@@ -162,13 +165,12 @@ export default function HomePage() {
                 <div className="grid gap-1.5">
                   <Label htmlFor="date" className="text-muted-foreground text-sm">Date of Journey</Label>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Input
+                    <DatePickerField
                       id="date"
-                      type="date"
-                      min={todayIso}
                       value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className="h-11 flex-1 min-w-[140px]"
+                      onChange={setDate}
+                      min={todayIso}
+                      className="h-11 min-h-[2.75rem] flex-1 min-w-[160px] py-0"
                     />
                     <span className="text-sm text-muted-foreground">
                       {isToday ? "(Today)" : date === tomorrowIso ? "(Tomorrow)" : ""}

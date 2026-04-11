@@ -30,6 +30,7 @@ urlpatterns = [
         name='operator_manifest_day',
     ),
     path('api/operator/', include('operator_portal.urls')),
+    path('api/admin/', include('admin_portal.urls')),
     path('api/', include('common.urls')),
     path('api/', include('bookings.urls')),
 

@@ -8,6 +8,9 @@ import { operatorApi, type OperatorSalesResponse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { DatePickerField } from "@/components/ui/date-picker-field";
+import { ClipboardList, IndianRupee, Sparkles, Ticket } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function todayYMD(): string {
   const t = new Date();
@@ -27,6 +30,11 @@ function addDaysYMD(ymd: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+function monthStartYMD(): string {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 function formatDt(iso: string) {
   try {
     return new Date(iso).toLocaleString("en-IN", {
@@ -39,6 +47,44 @@ function formatDt(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function KpiTile({
+  label,
+  value,
+  icon: Icon,
+  accent,
+}: {
+  label: string;
+  value: string;
+  icon: React.ElementType;
+  accent: "indigo" | "emerald" | "violet";
+}) {
+  const ring =
+    accent === "emerald"
+      ? "from-emerald-400 to-teal-400"
+      : accent === "violet"
+        ? "from-violet-400 to-fuchsia-400"
+        : "from-indigo-400 to-sky-400";
+  const iconBg =
+    accent === "emerald"
+      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+      : accent === "violet"
+        ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+        : "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300";
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm ring-1 ring-slate-200/40 dark:border-slate-800 dark:bg-slate-900/85 dark:ring-slate-800/50">
+      <div className={cn("absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r opacity-90", ring)} aria-hidden />
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+        <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", iconBg)}>
+          <Icon className="h-4 w-4" strokeWidth={2} />
+        </span>
+      </div>
+      <p className="mt-1.5 text-xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">{value}</p>
+    </div>
+  );
 }
 
 export default function OperatorSalesPage() {
@@ -89,142 +135,182 @@ export default function OperatorSalesPage() {
   }, [getValidToken, router, dateFrom, dateTo, activeOnly]);
 
   const summary = data?.summary;
+  const to = todayYMD();
+
+  const applyPreset = (days: number | "month") => {
+    if (days === "month") {
+      setDateFrom(monthStartYMD());
+      setDateTo(to);
+      return;
+    }
+    setDateFrom(addDaysYMD(to, -days));
+    setDateTo(to);
+  };
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16">
       <div>
         <Link
           href="/operator/dashboard"
-          className="text-sm text-slate-600 hover:text-indigo-600 dark:text-slate-400"
+          className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 transition-colors hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
         >
           ← Dashboard
         </Link>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">Sales</h1>
-        <p className="mt-1 text-slate-600 dark:text-slate-400">
-          Confirmed booking revenue by sale date. Totals below include only <strong>active</strong> sales (not
-          refunded or cancelled). Staff can also open <strong>Operator sales</strong> in Django admin for raw rows.
+        <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+          <Sparkles className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+          Revenue
+        </p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">Sales</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+          Confirmed revenue by <strong className="font-medium text-slate-700 dark:text-slate-300">sale date</strong> (when
+          payment was confirmed). Summary counts <strong className="font-medium text-slate-700 dark:text-slate-300">active</strong>{" "}
+          lines only. Raw export lives in Django admin → Operator sales.
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Filters</CardTitle>
-          <CardDescription>Filter by when the payment was confirmed (sale date).</CardDescription>
+      <Card className="rounded-2xl border-slate-200/80 bg-white/90 shadow-sm ring-1 ring-slate-200/50 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80 dark:ring-slate-800/60">
+        <CardHeader className="space-y-0 pb-2 pt-4 px-4 sm:px-5">
+          <CardTitle className="text-base font-semibold">Filters</CardTitle>
+          <CardDescription className="text-xs">Adjust range and presets reload the table automatically.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="sales-from">From</Label>
-            <input
-              id="sales-from"
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
+        <CardContent className="space-y-4 px-4 pb-4 pt-0 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="sales-from" className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  From
+                </Label>
+                <DatePickerField id="sales-from" value={dateFrom} onChange={setDateFrom} max={dateTo} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sales-to" className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  To
+                </Label>
+                <DatePickerField id="sales-to" value={dateTo} onChange={setDateTo} min={dateFrom} />
+              </div>
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200/90 bg-slate-50/80 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100/90 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800/80 lg:ml-0">
+              <input
+                type="checkbox"
+                checked={activeOnly}
+                onChange={(e) => setActiveOnly(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600"
+              />
+              <span className="leading-snug">Hide refunded / cancelled in the table</span>
+            </label>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="sales-to">To</Label>
-            <input
-              id="sales-to"
-              type="date"
-              value={dateTo}
-              min={dateFrom}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Quick</span>
+            {(
+              [
+                { label: "7 days", fn: () => applyPreset(7) },
+                { label: "30 days", fn: () => applyPreset(30) },
+                { label: "This month", fn: () => applyPreset("month") },
+              ] as const
+            ).map((p) => (
+              <Button
+                key={p.label}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-full border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/80 hover:text-indigo-800 dark:border-slate-600 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/40"
+                onClick={p.fn}
+              >
+                {p.label}
+              </Button>
+            ))}
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={activeOnly}
-              onChange={(e) => setActiveOnly(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            Hide refunded / cancelled rows
-          </label>
-          <Button type="button" variant="outline" size="sm" onClick={() => setDateFrom(addDaysYMD(todayYMD(), -7))}>
-            Last 7 days
-          </Button>
         </CardContent>
       </Card>
 
       {err ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
           {err}
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Active bookings (in range)</CardDescription>
-            <CardTitle className="text-2xl">
-              {loading ? "…" : summary?.active_booking_count ?? "—"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Gross (active, ₹)</CardDescription>
-            <CardTitle className="text-2xl">
-              {loading ? "…" : summary ? `₹${summary.gross_amount}` : "—"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Seats sold (active)</CardDescription>
-            <CardTitle className="text-2xl">{loading ? "…" : summary?.seat_count ?? "—"}</CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <KpiTile
+          label="Active bookings"
+          value={loading ? "…" : String(summary?.active_booking_count ?? "—")}
+          icon={ClipboardList}
+          accent="indigo"
+        />
+        <KpiTile
+          label="Gross (₹)"
+          value={loading ? "…" : summary ? `₹${summary.gross_amount}` : "—"}
+          icon={IndianRupee}
+          accent="emerald"
+        />
+        <KpiTile
+          label="Seats sold"
+          value={loading ? "…" : String(summary?.seat_count ?? "—")}
+          icon={Ticket}
+          accent="violet"
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sale lines</CardTitle>
-          <CardDescription>
-            {loading ? "Loading…" : `${data?.results.length ?? 0} row(s).`}
-          </CardDescription>
+      <Card className="overflow-hidden rounded-2xl border-slate-200/80 bg-white/90 shadow-sm ring-1 ring-slate-200/50 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80 dark:ring-slate-800/60">
+        <CardHeader className="border-b border-slate-100 py-3 dark:border-slate-800 sm:px-5">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
+            <CardTitle className="text-base font-semibold">Sale lines</CardTitle>
+            <CardDescription className="text-xs sm:text-right">
+              {loading ? "Loading…" : `${data?.results.length ?? 0} row${(data?.results.length ?? 0) === 1 ? "" : "s"} in range`}
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {!loading && data && data.results.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-slate-500">No sales in this range.</p>
+            <div className="px-5 py-10 text-center">
+              <Ticket className="mx-auto mb-2 h-8 w-8 text-slate-200 dark:text-slate-700" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">No sales in this range.</p>
+            </div>
           ) : !loading && data ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left text-sm">
+              <table className="w-full min-w-[720px] text-left text-xs sm:text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
-                    <th className="px-4 py-3">PNR</th>
-                    <th className="px-4 py-3">Route</th>
-                    <th className="px-4 py-3">Departure</th>
-                    <th className="px-4 py-3">Confirmed</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Seats</th>
-                    <th className="px-4 py-3">Status</th>
+                  <tr className="border-b border-slate-200 bg-slate-50/95 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
+                    <th className="px-3 py-2 sm:px-4">PNR</th>
+                    <th className="px-3 py-2 sm:px-4">Route</th>
+                    <th className="px-3 py-2 sm:px-4">Departure</th>
+                    <th className="px-3 py-2 sm:px-4">Confirmed</th>
+                    <th className="px-3 py-2 text-right sm:px-4">Amount</th>
+                    <th className="px-3 py-2 text-right sm:px-4">Seats</th>
+                    <th className="px-3 py-2 sm:px-4">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {data.results.map((r) => (
-                    <tr key={r.id}>
-                      <td className="px-4 py-3 font-mono text-xs">{r.pnr}</td>
-                      <td className="px-4 py-3">
-                        {r.origin} → {r.destination}
+                    <tr key={r.id} className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-[11px] text-slate-600 dark:text-slate-400 sm:px-4 sm:text-xs">
+                        {r.pnr}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                      <td className="max-w-[10rem] px-3 py-2 text-slate-800 dark:text-slate-200 sm:max-w-none sm:px-4">
+                        <span className="line-clamp-2 font-medium leading-snug">
+                          {r.origin} → {r.destination}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-400 sm:px-4">
                         {formatDt(r.departure_dt)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-600 dark:text-slate-400 sm:px-4">
                         {formatDt(r.confirmed_at)}
                       </td>
-                      <td className="px-4 py-3">₹{r.gross_amount}</td>
-                      <td className="px-4 py-3">{r.seat_count}</td>
-                      <td className="px-4 py-3">
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-slate-800 dark:text-slate-100 sm:px-4">
+                        ₹{r.gross_amount}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300 sm:px-4">
+                        {r.seat_count}
+                      </td>
+                      <td className="px-3 py-2 sm:px-4">
                         {r.reversal_status ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                          <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
                             {r.reversal_status}
                           </span>
                         ) : (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+                          <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
                             Active
                           </span>
                         )}
@@ -235,16 +321,22 @@ export default function OperatorSalesPage() {
               </table>
             </div>
           ) : (
-            <p className="px-6 pb-6 text-sm text-slate-500">Loading…</p>
+            <div className="flex items-center justify-center gap-2 px-5 py-10 text-sm text-slate-500">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600 dark:border-indigo-900 dark:border-t-indigo-400" />
+              Loading…
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <p className="text-center text-sm text-slate-500">
-        <Link href="/operator/schedules" className="text-indigo-600 hover:underline">
+      <div className="flex justify-center">
+        <Link
+          href="/operator/schedules"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50/80 dark:border-slate-700 dark:bg-slate-900 dark:text-indigo-300 dark:hover:bg-slate-800"
+        >
           Schedules &amp; manifests
         </Link>
-      </p>
+      </div>
     </div>
   );
 }

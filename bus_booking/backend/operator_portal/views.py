@@ -13,6 +13,10 @@ from django.utils import timezone
 from buses.models import Bus, Operator
 
 from bookings.models import Booking, OperatorSale, Schedule, ScheduleLocation
+from bookings.notifications import (
+    notify_operator_bulk_schedules_published,
+    notify_operator_schedule_published,
+)
 from common.models import Route, RoutePattern, RoutePatternStop
 from common.serializers import RoutePatternSerializer
 
@@ -135,7 +139,11 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
         return ctx
 
     def perform_create(self, serializer):
-        serializer.save(status="PENDING")
+        op = get_operator(self.request)
+        status = "ACTIVE" if op and op.is_kyc_cleared() else "PENDING"
+        serializer.save(status=status)
+        if serializer.instance.status == "ACTIVE":
+            notify_operator_schedule_published(serializer.instance, source="auto")
 
 
 class OperatorRoutePatternListView(generics.ListAPIView):
@@ -548,6 +556,7 @@ class OperatorDuplicateScheduleView(APIView):
         new_dep = src_dep + timedelta(days=delta_days)
         new_arr = src_arr + timedelta(days=delta_days)
 
+        sched_status = "ACTIVE" if operator.is_kyc_cleared() else "PENDING"
         new_schedule = Schedule.objects.create(
             bus=src.bus,
             route=src.route,
@@ -559,7 +568,7 @@ class OperatorDuplicateScheduleView(APIView):
             operator_promo_title=src.operator_promo_title,
             operator_offer_style=src.operator_offer_style,
             seat_fares_json=src.seat_fares_json,
-            status="PENDING",
+            status=sched_status,
         )
 
         # Copy boarding/dropping points
@@ -579,12 +588,17 @@ class OperatorDuplicateScheduleView(APIView):
                 description=dp.description or "",
             )
 
+        if new_schedule.status == "ACTIVE":
+            dup_msg = f"Schedule duplicated to {new_date_str}. It is live (verified operator)."
+            notify_operator_schedule_published(new_schedule, source="auto")
+        else:
+            dup_msg = f"Schedule duplicated to {new_date_str}. Status: PENDING (awaiting admin approval)."
         return Response({
             "id": new_schedule.id,
             "departure_dt": new_dep.isoformat(),
             "arrival_dt": new_arr.isoformat(),
             "status": new_schedule.status,
-            "message": f"Schedule duplicated to {new_date_str}. Status: PENDING (awaiting approval).",
+            "message": dup_msg,
         }, status=201)
 
 
@@ -668,6 +682,7 @@ class OperatorBulkCreateSchedulesView(APIView):
 
         created = []
         skipped = []
+        sched_status = "ACTIVE" if operator.is_kyc_cleared() else "PENDING"
         cur = date_from
         while cur <= date_to:
             if cur.weekday() in days_of_week:
@@ -687,15 +702,19 @@ class OperatorBulkCreateSchedulesView(APIView):
                         arrival_dt=arr_dt,
                         fare=fare,
                         **({"fare_original": fare_original} if fare_original else {}),
-                        status="PENDING",
+                        status=sched_status,
                     )
                     created.append({"id": s.id, "date": str(cur), "departure_dt": dep_dt})
             cur += timedelta(days=1)
+
+        if sched_status == "ACTIVE" and created:
+            notify_operator_bulk_schedules_published(operator, len(created), date_from, date_to)
 
         return Response({
             "created": len(created),
             "skipped": len(skipped),
             "schedules": created,
+            "schedule_status": sched_status,
         }, status=201)
 
 
@@ -722,13 +741,9 @@ class OperatorArchiveScheduleView(APIView):
 
 class OperatorDashboardStatsView(APIView):
     """
-    GET /api/operator/dashboard-stats/
-    Returns KPI summary for the operator dashboard:
-      - today_trips: list of today's schedules with fill data
-      - week_trips: next 7 days schedules (brief)
-      - kpi: { trips_today, seats_sold_today, seats_total_today,
-               revenue_today, revenue_week, revenue_month,
-               pending_approval, total_buses, active_schedules }
+    GET /api/operator/dashboard-stats/?date=YYYY-MM-DD
+    Daily summary (redBus-style): KPIs for calendar date, trip rows with revenue / ASP / occupancy.
+    ?date defaults to server local today. Week strip is always forward from real today.
     """
     permission_classes = [IsAuthenticated, IsOperator]
 
@@ -738,9 +753,18 @@ class OperatorDashboardStatsView(APIView):
             return Response({"detail": "Operator account not found."}, status=403)
 
         now = timezone.now()
-        today = now.date()
-        week_end = today + timedelta(days=7)
-        month_start = today.replace(day=1)
+        calendar_today = timezone.localdate()
+        date_raw = (request.query_params.get("date") or "").strip()
+        if date_raw:
+            try:
+                summary_date = date.fromisoformat(date_raw)
+            except ValueError:
+                summary_date = calendar_today
+        else:
+            summary_date = calendar_today
+
+        week_end = calendar_today + timedelta(days=7)
+        month_start = calendar_today.replace(day=1)
 
         # ── schedules ────────────────────────────────────────────────────────
         base_qs = Schedule.objects.filter(
@@ -748,12 +772,13 @@ class OperatorDashboardStatsView(APIView):
         ).select_related("bus", "route")
 
         today_schedules = list(
-            base_qs.filter(departure_dt__date=today).order_by("departure_dt")
+            base_qs.filter(departure_dt__date=summary_date, archived=False).order_by("departure_dt")
         )
         week_schedules = list(
             base_qs.filter(
-                departure_dt__date__gt=today,
+                departure_dt__date__gt=calendar_today,
                 departure_dt__date__lte=week_end,
+                archived=False,
             ).order_by("departure_dt")[:20]
         )
 
@@ -792,9 +817,16 @@ class OperatorDashboardStatsView(APIView):
             seats_sold_today_total += sold
             seats_capacity_today_total += cap
             revenue_today += rev
+            asp = round(rev / sold, 2) if sold else 0.0
+            svc = (s.bus.service_name or "").strip() or "Bus"
             today_trip_list.append({
                 "id": s.id,
+                "service_ref": f"EGO-{s.id}",
                 "route": f"{s.route.origin} → {s.route.destination}",
+                "origin": s.route.origin,
+                "destination": s.route.destination,
+                "service_type": svc,
+                "service_line": f"{svc} · {s.bus.registration_no}",
                 "departure_dt": s.departure_dt.isoformat(),
                 "status": s.status,
                 "bus_reg": s.bus.registration_no,
@@ -802,6 +834,7 @@ class OperatorDashboardStatsView(APIView):
                 "seats_total": cap,
                 "fill_pct": round(sold / cap * 100) if cap else 0,
                 "revenue": round(rev, 2),
+                "asp": asp,
             })
 
         # ── week trip details ─────────────────────────────────────────────────
@@ -825,11 +858,18 @@ class OperatorDashboardStatsView(APIView):
         for s in week_schedules:
             sold = week_seats_map.get(s.id, 0)
             cap = s.bus.capacity or 0
+            svc_w = (s.bus.service_name or "").strip() or "Bus"
             week_trip_list.append({
                 "id": s.id,
+                "service_ref": f"EGO-{s.id}",
                 "route": f"{s.route.origin} → {s.route.destination}",
+                "origin": s.route.origin,
+                "destination": s.route.destination,
+                "service_type": svc_w,
+                "service_line": f"{svc_w} · {s.bus.registration_no}",
                 "departure_dt": s.departure_dt.isoformat(),
                 "status": s.status,
+                "bus_reg": s.bus.registration_no,
                 "seats_sold": sold,
                 "seats_total": cap,
                 "fill_pct": round(sold / cap * 100) if cap else 0,
@@ -838,26 +878,36 @@ class OperatorDashboardStatsView(APIView):
         # ── revenue aggregates via OperatorSale ───────────────────────────────
         sale_qs = OperatorSale.objects.filter(operator=operator, reversal_status="")
         rev_week = float(
-            sale_qs.filter(confirmed_at__date__gte=today - timedelta(days=7)).aggregate(t=Sum("gross_amount"))["t"] or 0
+            sale_qs.filter(confirmed_at__date__gte=calendar_today - timedelta(days=7)).aggregate(t=Sum("gross_amount"))["t"] or 0
         )
         rev_month = float(
             sale_qs.filter(confirmed_at__date__gte=month_start).aggregate(t=Sum("gross_amount"))["t"] or 0
         )
 
         # ── other counts ─────────────────────────────────────────────────────
-        pending_count = base_qs.filter(status="PENDING").count()
-        total_buses = base_qs.values("bus_id").distinct().count()
+        pending_count = base_qs.filter(status="PENDING", archived=False).count()
+        total_buses = Bus.objects.filter(operator=operator).count()
         active_schedules = base_qs.filter(
-            status="ACTIVE", departure_dt__date__gte=today
+            status="ACTIVE", departure_dt__date__gte=calendar_today, archived=False
         ).count()
+        trips_active_today = sum(1 for s in today_schedules if s.status == "ACTIVE")
+        bookings_today = Booking.objects.filter(
+            schedule_id__in=today_sched_ids,
+            status__in=("CONFIRMED", "REFUNDED"),
+        ).count()
+        asp_today = round(revenue_today / seats_sold_today_total, 2) if seats_sold_today_total else 0.0
 
         return Response({
+            "summary_date": summary_date.isoformat(),
             "kpi": {
                 "trips_today": len(today_schedules),
+                "trips_active_today": trips_active_today,
                 "seats_sold_today": seats_sold_today_total,
                 "seats_total_today": seats_capacity_today_total,
                 "fill_pct_today": round(seats_sold_today_total / seats_capacity_today_total * 100) if seats_capacity_today_total else 0,
                 "revenue_today": round(revenue_today, 2),
+                "asp_today": asp_today,
+                "bookings_count_today": bookings_today,
                 "revenue_week": round(rev_week, 2),
                 "revenue_month": round(rev_month, 2),
                 "pending_approval": pending_count,

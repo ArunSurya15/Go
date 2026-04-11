@@ -8,6 +8,7 @@ import { operatorApi, type Schedule } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { cn } from "@/lib/utils";
 import { Copy, Archive, ArchiveRestore, LayoutList, X, CheckCircle } from "lucide-react";
 
@@ -77,15 +78,11 @@ function DuplicateModal({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="dup-date">New departure date</Label>
-          <input
-            id="dup-date"
-            type="date"
-            value={date}
-            min={todayYMD()}
-            onChange={(e) => setDate(e.target.value)}
-            className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          <p className="text-xs text-slate-500">Arrival is shifted by the same number of days. New schedule starts as PENDING.</p>
+          <DatePickerField id="dup-date" value={date} onChange={setDate} min={todayYMD()} />
+          <p className="text-xs text-slate-500">
+            Arrival shifts by the same number of days. If your operator is verified, the copy is live immediately;
+            otherwise it stays pending until admin approval.
+          </p>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex gap-2 pt-1">
@@ -254,13 +251,11 @@ export default function OperatorSchedulesPage() {
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="op-from">From</Label>
-              <input id="op-from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-                className="flex h-10 rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              <DatePickerField id="op-from" value={dateFrom} onChange={setDateFrom} max={dateTo} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="op-to">To</Label>
-              <input id="op-to" type="date" value={dateTo} min={dateFrom} onChange={(e) => setDateTo(e.target.value)}
-                className="flex h-10 rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              <DatePickerField id="op-to" value={dateTo} onChange={setDateTo} min={dateFrom} />
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer pb-1">
               <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="rounded" />
@@ -291,8 +286,7 @@ export default function OperatorSchedulesPage() {
         <CardContent className="flex flex-wrap items-end gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="op-manifest-day">Day</Label>
-            <input id="op-manifest-day" type="date" value={exportDay} onChange={(e) => setExportDay(e.target.value)}
-              className="flex h-10 rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+            <DatePickerField id="op-manifest-day" value={exportDay} onChange={setExportDay} />
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" disabled={!!dayExporting} onClick={() => downloadDayManifest("csv")}>

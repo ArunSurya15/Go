@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 function toLocalISO(dateStr: string, timeStr: string): string {
@@ -172,7 +173,8 @@ export default function AddSchedulePage() {
         <CardHeader>
           <CardTitle>Add schedule</CardTitle>
           <CardDescription>
-            Create a new trip: select bus and route, set departure/arrival and fare. New schedules are created as PENDING until approved.
+            Create a new trip: select bus and route, set departure/arrival and fare. If your operator is verified with
+            e-GO, the trip goes live immediately; otherwise it stays pending until admin approves after KYC review.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -253,12 +255,10 @@ export default function AddSchedulePage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="departure_date">Departure date</Label>
-                <Input
+                <DatePickerField
                   id="departure_date"
-                  type="date"
                   value={form.departure_date}
-                  onChange={(e) => setForm((f) => ({ ...f, departure_date: e.target.value }))}
-                  required
+                  onChange={(v) => setForm((f) => ({ ...f, departure_date: v }))}
                 />
               </div>
               <div className="space-y-2">
@@ -275,12 +275,11 @@ export default function AddSchedulePage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="arrival_date">Arrival date</Label>
-                <Input
+                <DatePickerField
                   id="arrival_date"
-                  type="date"
                   value={form.arrival_date}
-                  onChange={(e) => setForm((f) => ({ ...f, arrival_date: e.target.value }))}
-                  required
+                  onChange={(v) => setForm((f) => ({ ...f, arrival_date: v }))}
+                  min={form.departure_date || undefined}
                 />
               </div>
               <div className="space-y-2">

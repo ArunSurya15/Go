@@ -20,14 +20,14 @@ Operators manage **their** buses and schedules via the **Operator API**. There i
 
 1. In Django Admin: **Buses → Operators** → Add Operator (name, contact, KYC status, etc.).
 2. **Users → Users** → Add User (or pick existing). Set **Role** = **Operator**, **Operator** = the operator you created. Save.
-3. Log in with that user’s username/password to get a JWT and call the operator APIs.
+3. Log in with that user’s **username, email, or mobile** and password to get a JWT and call the operator APIs (the API accepts any of these in the `username` field).
 
 ---
 
 ## 2. Log in and get a JWT
 
 **POST** `/api/users/login/`  
-Body (JSON):
+Body (JSON). The `username` key holds your **login identifier**: actual username, **email**, or **mobile** (see `users.backends.CaseInsensitiveBackend`).
 
 ```json
 {
@@ -35,6 +35,8 @@ Body (JSON):
   "password": "Passw0rd!"
 }
 ```
+
+Self-registered operators typically sign in with **email or phone**; `demo_operator` is the seeded username example.
 
 Response includes:
 

@@ -5,6 +5,14 @@ class Operator(models.Model):
     contact_info = models.TextField(blank=True)
     kyc_status = models.CharField(max_length=20, default='PENDING')
     bank_details = models.TextField(blank=True)
+    # Admin review progress (JSON): personal_reviewed, fleet_reviewed, identity_payout_reviewed (bools)
+    kyc_checklist_json = models.TextField(default="{}", blank=True)
+    # Internal notes — not shown to operators
+    kyc_internal_notes = models.TextField(blank=True, default="")
+
+    def is_kyc_cleared(self) -> bool:
+        """True when admin has cleared this operator — new schedules can go live without a review queue."""
+        return (self.kyc_status or "").strip().upper() in frozenset({"VERIFIED", "APPROVED"})
 
     def __str__(self):
         return self.name

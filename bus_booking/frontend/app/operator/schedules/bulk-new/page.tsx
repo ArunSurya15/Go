@@ -8,6 +8,7 @@ import { operatorApi, routes as routesApi, type OperatorBus, type Route } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CheckCircle, Calendar, AlertCircle } from "lucide-react";
 
@@ -36,7 +37,11 @@ export default function BulkNewSchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{
+    created: number;
+    skipped: number;
+    schedule_status?: "ACTIVE" | "PENDING";
+  } | null>(null);
 
   const [buses, setBuses] = useState<OperatorBus[]>([]);
   const [routesList, setRoutesList] = useState<Route[]>([]);
@@ -96,7 +101,11 @@ export default function BulkNewSchedulesPage() {
         date_to: form.date_to,
         days_of_week: selectedDays,
       });
-      setResult({ created: res.created, skipped: res.skipped });
+      setResult({
+        created: res.created,
+        skipped: res.skipped,
+        schedule_status: res.schedule_status,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bulk create failed.");
     } finally {
@@ -114,7 +123,16 @@ export default function BulkNewSchedulesPage() {
         </div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Schedules created!</h2>
         <p className="text-slate-600 dark:text-slate-400">
-          <strong>{result.created}</strong> schedule{result.created !== 1 ? "s" : ""} created as <span className="text-amber-600 font-medium">PENDING</span> (awaiting admin approval).
+          <strong>{result.created}</strong> schedule{result.created !== 1 ? "s" : ""} created as{" "}
+          {result.schedule_status === "ACTIVE" ? (
+            <>
+              <span className="text-emerald-600 font-medium">ACTIVE</span> (live — your operator is verified with e-GO).
+            </>
+          ) : (
+            <>
+              <span className="text-amber-600 font-medium">PENDING</span> (awaiting admin approval until KYC is verified).
+            </>
+          )}
           {result.skipped > 0 && ` ${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""} skipped.`}
         </p>
         <div className="flex gap-3 justify-center">
@@ -138,7 +156,10 @@ export default function BulkNewSchedulesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Trip details</CardTitle>
-          <CardDescription>All created schedules will have the same bus, route, times, and fare.</CardDescription>
+          <CardDescription>
+            All created schedules share the same bus, route, times, and fare. Verified operators get trips live
+            immediately; new operators stay pending until admin verifies KYC.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -203,11 +224,11 @@ export default function BulkNewSchedulesPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>From date</Label>
-                <Input type="date" value={form.date_from} onChange={(e) => setForm((f) => ({ ...f, date_from: e.target.value }))} required />
+                <DatePickerField value={form.date_from} onChange={(v) => setForm((f) => ({ ...f, date_from: v }))} max={form.date_to} />
               </div>
               <div className="space-y-1.5">
                 <Label>To date</Label>
-                <Input type="date" value={form.date_to} min={form.date_from} onChange={(e) => setForm((f) => ({ ...f, date_to: e.target.value }))} required />
+                <DatePickerField value={form.date_to} onChange={(v) => setForm((f) => ({ ...f, date_to: v }))} min={form.date_from} />
               </div>
             </div>
 

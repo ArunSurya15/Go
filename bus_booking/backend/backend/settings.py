@@ -110,6 +110,7 @@ INSTALLED_APPS = [
     'bookings',
     'common',
     'operator_portal',
+    'admin_portal',
 ]
 
 MIDDLEWARE = [

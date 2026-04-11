@@ -26,6 +26,7 @@ const columns = [
     items: [
       { label: "Operator login", href: "/operator/login" },
       { label: "Dashboard", href: "/operator/dashboard" },
+      { label: "Admin portal", href: "/admin/login" },
     ],
   },
   {
