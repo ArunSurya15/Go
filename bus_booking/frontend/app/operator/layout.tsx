@@ -45,10 +45,16 @@ export default function OperatorLayout({
                   Dashboard
                 </Link>
                 <Link
+                  href="/operator/buses"
+                  className="text-sm text-slate-600 hover:text-indigo-600"
+                >
+                  Buses
+                </Link>
+                <Link
                   href="/operator/schedules"
                   className="text-sm text-slate-600 hover:text-indigo-600"
                 >
-                  Pricing
+                  Schedules
                 </Link>
                 <Link
                   href="/operator/onboarding"

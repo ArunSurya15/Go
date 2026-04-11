@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { booking, routes, type SeatMapResponse, type Schedule } from "@/lib/api";
 import { computeFemaleOnlySeatLabels } from "@/components/seat-layout";
+import { User, AlertCircle } from "lucide-react";
 
 function isMalePassengerGender(g: string): boolean {
   const u = g.trim().toUpperCase();
@@ -280,39 +280,104 @@ export default function PassengerPage() {
               {seats.map((seat, idx) => {
                 const deck = seatMap ? getSeatDeck(seat, seatMap.layout) : "Lower deck";
                 const p = passengers[seat] || { name: "", age: "", gender: "" };
+                const isFemaleOnly = femaleOnlySeats.has(seat);
+                // Avatar accent colours cycling through a palette
+                const avatarColors = [
+                  "from-indigo-500 to-violet-600",
+                  "from-emerald-500 to-teal-600",
+                  "from-amber-500 to-orange-500",
+                  "from-pink-500 to-rose-600",
+                  "from-sky-500 to-cyan-600",
+                ];
+                const avatarGrad = avatarColors[idx % avatarColors.length];
+
+                const handleGenderChange = (next: string) => {
+                  setPassengers((prev) => {
+                    const merged = { ...prev, [seat]: { ...prev[seat], gender: next } };
+                    const bad = seats.find((s) => {
+                      const g = merged[s]?.gender;
+                      return femaleOnlySeats.has(s) && !!g && isMalePassengerGender(g);
+                    });
+                    if (bad) {
+                      setError(`Seat ${bad} is only available for female passengers. Select Female or change your seat.`);
+                    } else {
+                      setError((prev) => prev.includes("only available for female") ? "" : prev);
+                    }
+                    return merged;
+                  });
+                };
+
                 return (
-                  <div key={seat} className="rounded-lg border p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">👤</span>
-                        <div>
-                          <p className="font-medium">Passenger {idx + 1}</p>
-                          <p className="text-xs text-muted-foreground">Seat {seat}, {deck}</p>
-                          {femaleOnlySeats.has(seat) && (
-                            <p className="text-xs text-pink-700 mt-1">
-                              Female passengers only — next to a booked female.
-                            </p>
-                          )}
+                  <div
+                    key={seat}
+                    className="rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden"
+                  >
+                    {/* Card header */}
+                    <div className="flex items-center gap-4 px-5 py-4 bg-slate-50 dark:bg-slate-800/50">
+                      {/* Avatar */}
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${avatarGrad} shadow-sm`}>
+                        <User className="h-5 w-5 text-white" strokeWidth={2} />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">
+                          Passenger {idx + 1}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {/* Seat badge */}
+                          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2.5 py-0.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                            Seat {seat}
+                          </span>
+                          {/* Deck badge */}
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            deck === "Upper deck"
+                              ? "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300"
+                              : "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
+                          }`}>
+                            {deck === "Upper deck" ? "⬆ Upper" : "⬇ Lower"}
+                          </span>
                         </div>
                       </div>
+
+                      {/* Female-only warning badge */}
+                      {isFemaleOnly && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-pink-100 dark:bg-pink-900/30 px-2.5 py-1 text-xs font-semibold text-pink-700 dark:text-pink-300 shrink-0">
+                          ♀ Female only
+                        </span>
+                      )}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
+
+                    {/* Female-only notice */}
+                    {isFemaleOnly && (
+                      <div className="flex items-start gap-2 mx-5 mt-3 rounded-xl bg-pink-50 dark:bg-pink-950/30 border border-pink-100 dark:border-pink-900 px-3 py-2.5">
+                        <AlertCircle className="h-4 w-4 text-pink-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-pink-700 dark:text-pink-300">
+                          This seat is next to a booked female passenger. Only female passengers may be assigned here.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Fields */}
+                    <div className="px-5 py-4 grid gap-4 sm:grid-cols-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor={`name-${seat}`}>Name *</Label>
+                        <Label htmlFor={`name-${seat}`} className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Full name *
+                        </Label>
                         <Input
                           id={`name-${seat}`}
                           value={p.name}
                           onChange={(e) =>
-                            setPassengers((prev) => ({
-                              ...prev,
-                              [seat]: { ...prev[seat], name: e.target.value },
-                            }))
+                            setPassengers((prev) => ({ ...prev, [seat]: { ...prev[seat], name: e.target.value } }))
                           }
-                          placeholder="Full name"
+                          placeholder="e.g. Priya Sharma"
+                          className="rounded-xl"
                         />
                       </div>
+
                       <div className="space-y-1.5">
-                        <Label htmlFor={`age-${seat}`}>Age *</Label>
+                        <Label htmlFor={`age-${seat}`} className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Age *
+                        </Label>
                         <Input
                           id={`age-${seat}`}
                           type="number"
@@ -320,93 +385,34 @@ export default function PassengerPage() {
                           max={120}
                           value={p.age}
                           onChange={(e) =>
-                            setPassengers((prev) => ({
-                              ...prev,
-                              [seat]: { ...prev[seat], age: e.target.value },
-                            }))
+                            setPassengers((prev) => ({ ...prev, [seat]: { ...prev[seat], age: e.target.value } }))
                           }
-                          placeholder="Age"
+                          placeholder="e.g. 28"
+                          className="rounded-xl"
                         />
                       </div>
+
                       <div className="space-y-1.5">
-                        <Label htmlFor={`gender-${seat}`}>Gender *</Label>
-                        <div className="flex gap-4">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name={`gender-${seat}`}
-                              value="Male"
-                              checked={p.gender === "Male"}
-                              onChange={(e) => {
-                                const next = e.target.value;
-                                setPassengers((prev) => {
-                                  const merged = {
-                                    ...prev,
-                                    [seat]: { ...prev[seat], gender: next },
-                                  };
-                                  const bad = seats.find((s) => {
-                                    const g = merged[s]?.gender;
-                                    return (
-                                      femaleOnlySeats.has(s) &&
-                                      !!g &&
-                                      isMalePassengerGender(g)
-                                    );
-                                  });
-                                  if (bad) {
-                                    setError(
-                                      `Seat ${bad} is only available for female passengers (next to a booked female). Select Female or change your seat before payment.`
-                                    );
-                                  } else {
-                                    setError((prevErr) =>
-                                      prevErr.includes("only available for female")
-                                        ? ""
-                                        : prevErr
-                                    );
-                                  }
-                                  return merged;
-                                });
-                              }}
-                            />
-                            <span className="text-sm">Male</span>
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name={`gender-${seat}`}
-                              value="Female"
-                              checked={p.gender === "Female"}
-                              onChange={(e) => {
-                                const next = e.target.value;
-                                setPassengers((prev) => {
-                                  const merged = {
-                                    ...prev,
-                                    [seat]: { ...prev[seat], gender: next },
-                                  };
-                                  const bad = seats.find((s) => {
-                                    const g = merged[s]?.gender;
-                                    return (
-                                      femaleOnlySeats.has(s) &&
-                                      !!g &&
-                                      isMalePassengerGender(g)
-                                    );
-                                  });
-                                  if (bad) {
-                                    setError(
-                                      `Seat ${bad} is only available for female passengers (next to a booked female). Select Female or change your seat before payment.`
-                                    );
-                                  } else {
-                                    setError((prevErr) =>
-                                      prevErr.includes("only available for female")
-                                        ? ""
-                                        : prevErr
-                                    );
-                                  }
-                                  return merged;
-                                });
-                              }}
-                            />
-                            <span className="text-sm">Female</span>
-                          </label>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Gender *
+                        </Label>
+                        <div className="flex gap-2">
+                          {["Male", "Female"].map((g) => (
+                            <button
+                              key={g}
+                              type="button"
+                              onClick={() => handleGenderChange(g)}
+                              className={`flex-1 rounded-xl border py-2 text-sm font-medium transition-all ${
+                                p.gender === g
+                                  ? g === "Male"
+                                    ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                    : "bg-pink-500 border-pink-500 text-white shadow-sm"
+                                  : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-300 hover:text-indigo-600"
+                              }`}
+                            >
+                              {g === "Male" ? "♂ Male" : "♀ Female"}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     </div>

@@ -36,6 +36,7 @@ class Schedule(models.Model):
     # Stored as JSON text (SQLite-friendly; same pattern as Bus.seat_map_json).
     seat_fares_json = models.TextField(default="{}", blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    archived = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['departure_dt']
