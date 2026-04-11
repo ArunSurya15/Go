@@ -331,6 +331,7 @@ class CreatePaymentView(generics.GenericAPIView):
             'amount': amount,
             'status': 'PENDING',
             'contact_phone': request.data.get('contact_phone', ''),
+            'contact_email': request.data.get('contact_email', ''),
             'state_of_residence': request.data.get('state_of_residence', ''),
             'whatsapp_opt_in': request.data.get('whatsapp_opt_in', False),
         }
@@ -485,8 +486,14 @@ class PaymentWebhookView(generics.GenericAPIView):
                 booking.ticket_file = filename
                 booking.save()
             except Exception as e:
-                # Log error but don't fail the webhook
                 print(f"Failed to generate ticket for booking {booking.id}: {str(e)}")
+
+        # Send confirmation email + WhatsApp (fire-and-forget, never raises)
+        try:
+            from .notifications import notify_booking_confirmed
+            notify_booking_confirmed(booking)
+        except Exception as e:
+            print(f"Failed to send notifications for booking {booking.id}: {str(e)}")
 
         return Response({'ok': True})
 
@@ -601,6 +608,56 @@ class SubmitBusRatingView(APIView):
         )
         refresh_bus_rating_aggregate(booking.schedule.bus)
         return Response({"detail": "Thank you for your rating.", "bus_id": booking.schedule.bus_id}, status=201)
+
+
+class BookingCancelView(APIView):
+    """
+    POST /api/bookings/{pk}/cancel/
+    Body (optional): { "reason": "..." }
+    Passenger can cancel their own CONFIRMED booking.
+    Returns cancellation summary with refund amount.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        """Preview: returns refund estimate without cancelling."""
+        booking = get_object_or_404(
+            Booking.objects.select_related("schedule", "schedule__bus"),
+            pk=pk, user=request.user,
+        )
+        from .cancellation import cancellation_allowed, calculate_refund_amount, hours_until_departure, get_policy
+        allowed, msg = cancellation_allowed(booking, by="passenger")
+        refund_amount, tier = calculate_refund_amount(booking) if allowed else ("0.00", "none")
+        policy = get_policy()
+        hours = hours_until_departure(booking)
+        return Response({
+            "booking_id": booking.id,
+            "status": booking.status,
+            "amount": str(booking.amount),
+            "cancellation_allowed": allowed,
+            "cancellation_blocked_reason": msg,
+            "refund_amount": str(refund_amount),
+            "refund_tier": tier,
+            "hours_until_departure": round(max(hours, 0), 1),
+            "policy": {
+                "full_refund_hours": policy["full_refund_hours"],
+                "partial_refund_hours": policy["partial_refund_hours"],
+                "partial_refund_pct": policy["partial_refund_pct"],
+            },
+        })
+
+    def post(self, request, pk):
+        booking = get_object_or_404(
+            Booking.objects.select_related("schedule", "schedule__bus", "user"),
+            pk=pk, user=request.user,
+        )
+        reason = str(request.data.get("reason") or "")[:255]
+        from .cancellation import cancel_booking
+        try:
+            result = cancel_booking(booking, by="passenger", reason=reason)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=400)
+        return Response(result)
 
 
 class BusReviewListView(generics.ListAPIView):

@@ -1,24 +1,56 @@
 import json
+import re
+import uuid
 from rest_framework import serializers
 from .models import User
 from django.contrib.auth.password_validation import validate_password
 from buses.models import Operator
 
 
-class UserRegisterSerializer(serializers.ModelSerializer):
+def _auto_username(email: str = "", phone: str = "") -> str:
+    """Generate a unique username from email or phone."""
+    if email:
+        base = re.sub(r"[^a-zA-Z0-9]", "", email.split("@")[0])[:20] or "user"
+    else:
+        digits = re.sub(r"\D", "", phone)
+        base = "user" + digits[-6:] if len(digits) >= 6 else "user"
+    username = base
+    if User.objects.filter(username__iexact=username).exists():
+        username = base + "_" + uuid.uuid4().hex[:5]
+    return username
+
+
+class UserRegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
     password = serializers.CharField(write_only=True, validators=[validate_password])
 
-    class Meta:
-        model = User
-        fields = ('username', 'email', 'password', 'role')
+    def validate(self, attrs):
+        email = (attrs.get("email") or "").strip()
+        phone = (attrs.get("phone") or "").strip()
+        if not email and not phone:
+            raise serializers.ValidationError("Provide at least an email or a phone number.")
+        if email and User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError({"email": "This email is already registered."})
+        if phone:
+            from .otp import normalize_phone
+            phone = normalize_phone(phone)
+            attrs["phone"] = phone
+            if User.objects.filter(phone=phone).exists():
+                raise serializers.ValidationError({"phone": "This mobile number is already registered."})
+        return attrs
 
     def create(self, validated_data):
+        email = (validated_data.get("email") or "").strip()
+        phone = (validated_data.get("phone") or "").strip()
+        username = _auto_username(email=email, phone=phone)
         user = User(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            role=validated_data.get('role', 'PASSENGER')
+            username=username,
+            email=email,
+            phone=phone,
+            role="PASSENGER",
         )
-        user.set_password(validated_data['password'])
+        user.set_password(validated_data["password"])
         user.save()
         return user
 

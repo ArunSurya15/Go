@@ -48,16 +48,18 @@ export default function LoginPage() {
       >
         <Card>
           <CardHeader>
-            <CardTitle>Login</CardTitle>
-            <CardDescription>Sign in to book buses.</CardDescription>
+            <CardTitle>Sign in</CardTitle>
+            <CardDescription>Enter your email or mobile number to continue.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username">Email or mobile number</Label>
                 <Input
                   id="username"
+                  type="text"
                   autoComplete="username"
+                  placeholder="you@example.com or 9876543210"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required

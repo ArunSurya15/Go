@@ -64,6 +64,7 @@ export default function PaymentPage() {
         boarding_point_id: latestFlow.boarding_point_id ?? flow.boarding_point_id,
         dropping_point_id: latestFlow.dropping_point_id ?? flow.dropping_point_id,
         contact_phone: latestFlow.contact_phone ?? flow.contact_phone ?? "",
+        contact_email: latestFlow.email ?? flow.email ?? "",
         state_of_residence: latestFlow.state_of_residence ?? flow.state_of_residence ?? "",
         whatsapp_opt_in: latestFlow.whatsapp_opt_in ?? flow.whatsapp_opt_in ?? false,
         passengers: latestFlow.passengers ?? flow.passengers ?? undefined,

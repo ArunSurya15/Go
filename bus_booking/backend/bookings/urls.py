@@ -4,6 +4,7 @@ from .views import (
     ScheduleSeatMapView, ScheduleTrackView,
     ReserveView, CreatePaymentView, PaymentWebhookView, BookingListView,
     TicketView, TicketDownloadView, SubmitBusRatingView, BusReviewListView,
+    BookingCancelView,
 )
 
 urlpatterns = [
@@ -17,6 +18,7 @@ urlpatterns = [
     path('reserve/', ReserveView.as_view(), name='reserve'),
     path('create-payment/', CreatePaymentView.as_view(), name='create_payment'),
     path('payment/webhook/', PaymentWebhookView.as_view(), name='payment_webhook'),
+    path('bookings/<int:pk>/cancel/', BookingCancelView.as_view(), name='booking_cancel'),
     path('bookings/<int:pk>/rating/', SubmitBusRatingView.as_view(), name='booking_rating'),
     path('bookings/<int:pk>/ticket/', TicketView.as_view(), name='ticket'),
     path('tickets/download/<int:pk>/', TicketDownloadView.as_view(), name='ticket_download'),

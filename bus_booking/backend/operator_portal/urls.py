@@ -10,6 +10,8 @@ from .views import (
     OperatorScheduleBookingsListView,
     OperatorBookingsExportView,
     OperatorSalesListView,
+    OperatorCancelBookingView,
+    OperatorCancelScheduleView,
 )
 
 urlpatterns = [
@@ -31,6 +33,8 @@ urlpatterns = [
         name="operator_schedule_bookings_export",
     ),
     path("schedules/<int:schedule_id>/bookings/", OperatorScheduleBookingsListView.as_view(), name="operator_schedule_bookings"),
+    path("schedules/<int:schedule_id>/bookings/<int:booking_id>/cancel/", OperatorCancelBookingView.as_view(), name="operator_cancel_booking"),
+    path("schedules/<int:schedule_id>/cancel/", OperatorCancelScheduleView.as_view(), name="operator_cancel_schedule"),
     path("schedules/<int:pk>/location/", ScheduleLocationView.as_view(), name="operator_schedule_location"),
     path("schedules/<int:pk>/", ScheduleDetailView.as_view(), name="operator_schedule_detail"),
 ]

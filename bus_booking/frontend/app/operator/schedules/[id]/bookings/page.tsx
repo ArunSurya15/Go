@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -8,6 +8,7 @@ import { operatorApi, type OperatorManifestBooking, type Schedule } from "@/lib/
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { AlertTriangle, X } from "lucide-react";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,59 @@ function expandToSeats(bookings: OperatorManifestBooking[]): ManifestRow[] {
   return out.sort((a, b) => compareSeat(a.seat, b.seat));
 }
 
+// ─── cancel modal ────────────────────────────────────────────────────────────
+
+function OperatorCancelModal({ title, body, onConfirm, onClose, loading }: {
+  title: string;
+  body: ReactNode;
+  onConfirm: (reason: string, refundPct: number) => void;
+  onClose: () => void;
+  loading: boolean;
+}) {
+  const [reason, setReason] = useState("");
+  const [refundPct, setRefundPct] = useState(100);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+        </div>
+        {body}
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Refund percentage</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range" min={0} max={100} step={10} value={refundPct}
+                onChange={(e) => setRefundPct(Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="w-12 text-right font-semibold text-indigo-600">{refundPct}%</span>
+            </div>
+            <p className="text-xs text-slate-400">0% = cancel only, 100% = full refund to passenger</p>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Reason (optional)</label>
+            <input
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-800"
+              placeholder="e.g. Bus breakdown"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>Back</Button>
+          <Button variant="destructive" className="flex-1" onClick={() => onConfirm(reason, refundPct)} disabled={loading}>
+            {loading ? "Processing…" : "Confirm cancel"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── component ──────────────────────────────────────────────────────────────
 
 type Tab = "manifest" | "bookings";
@@ -103,6 +157,11 @@ export default function OperatorScheduleBookingsPage() {
   const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("manifest");
+
+  // Cancellation state
+  const [cancelTarget, setCancelTarget] = useState<{ type: "booking"; bookingId: number } | { type: "schedule" } | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!Number.isFinite(scheduleId)) { setErr("Invalid schedule."); setLoading(false); return; }
@@ -141,6 +200,29 @@ export default function OperatorScheduleBookingsPage() {
     } finally { setExporting(null); }
   };
 
+  const doOperatorCancel = async (reason: string, refundPct: number) => {
+    if (!cancelTarget) return;
+    const token = await getValidToken();
+    if (!token) return;
+    setCancelLoading(true);
+    try {
+      if (cancelTarget.type === "booking") {
+        const result = await operatorApi.cancelBooking(token, scheduleId, cancelTarget.bookingId, { reason, refund_pct: refundPct });
+        setRows((prev) => prev.map((b) => b.id === cancelTarget.bookingId ? { ...b, status: result.status } : b));
+        setCancelMsg(`Booking #${cancelTarget.bookingId} cancelled. Refund: ₹${result.refund_amount}`);
+      } else {
+        const result = await operatorApi.cancelSchedule(token, scheduleId, { reason, refund_pct: refundPct });
+        setCancelMsg(`Schedule cancelled. ${result.cancelled_bookings} booking(s) cancelled.`);
+        load();
+      }
+    } catch (e) {
+      setCancelMsg(`Error: ${e instanceof Error ? e.message : "Cancellation failed."}`);
+    } finally {
+      setCancelLoading(false);
+      setCancelTarget(null);
+    }
+  };
+
   const route = schedule?.route as { origin?: string; destination?: string } | undefined;
   const manifestRows = useMemo(() => expandToSeats(rows), [rows]);
   const totalSeats = manifestRows.length;
@@ -150,21 +232,57 @@ export default function OperatorScheduleBookingsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16">
 
+      {/* Cancel modal */}
+      {cancelTarget && (
+        <OperatorCancelModal
+          title={cancelTarget.type === "schedule" ? "Cancel entire schedule" : "Cancel booking"}
+          body={
+            cancelTarget.type === "schedule" ? (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2.5 text-sm text-red-700 dark:text-red-300">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                This will cancel <strong>all active bookings</strong> on this schedule and trigger refunds.
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                This will cancel booking #{(cancelTarget as { type: "booking"; bookingId: number }).bookingId} and process the refund.
+              </p>
+            )
+          }
+          onConfirm={doOperatorCancel}
+          onClose={() => setCancelTarget(null)}
+          loading={cancelLoading}
+        />
+      )}
+
       {/* Header */}
       <div>
         <Link href="/operator/schedules" className="text-sm text-slate-500 hover:text-indigo-600">
           ← All schedules
         </Link>
-        <h1 className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">Bookings & manifest</h1>
-        <p className="mt-1 text-slate-500 dark:text-slate-400">
-          {route ? `${route.origin} → ${route.destination}` : loading ? "Loading…" : "Trip"}
-          {schedule ? ` · ${formatDt(schedule.departure_dt)}` : ""}
-        </p>
-        {schedule ? (
-          <Link href={`/operator/schedules/${schedule.id}/edit`} className="mt-1.5 inline-block text-sm text-indigo-600 hover:underline">
-            Edit pricing & offers
-          </Link>
-        ) : null}
+        <div className="mt-2 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Bookings & manifest</h1>
+            <p className="mt-1 text-slate-500 dark:text-slate-400">
+              {route ? `${route.origin} → ${route.destination}` : loading ? "Loading…" : "Trip"}
+              {schedule ? ` · ${formatDt(schedule.departure_dt)}` : ""}
+            </p>
+            {schedule ? (
+              <Link href={`/operator/schedules/${schedule.id}/edit`} className="mt-1.5 inline-block text-sm text-indigo-600 hover:underline">
+                Edit pricing & offers
+              </Link>
+            ) : null}
+          </div>
+          {!loading && rows.filter((b) => b.status === "CONFIRMED").length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400"
+              onClick={() => { setCancelMsg(null); setCancelTarget({ type: "schedule" }); }}
+            >
+              Cancel schedule
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stats + Export */}
@@ -193,7 +311,10 @@ export default function OperatorScheduleBookingsPage() {
         </div>
       ) : null}
 
-      {/* Errors / hints */}
+      {/* Errors / hints / cancel feedback */}
+      {cancelMsg ? (
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">{cancelMsg}</p>
+      ) : null}
       {hint ? (
         <p className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900/50 dark:text-slate-200">{hint}</p>
       ) : null}
@@ -307,7 +428,7 @@ export default function OperatorScheduleBookingsPage() {
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {rows.map((b) => (
                   <div key={b.id} className="px-6 py-5 space-y-3">
-                    {/* PNR + badges + amount + date */}
+                    {/* PNR + badges + amount + date + cancel */}
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-bold text-indigo-700 dark:text-indigo-300">{b.pnr}</span>
                       <span className={statusPill(b.status)}>{b.status}</span>
@@ -315,7 +436,17 @@ export default function OperatorScheduleBookingsPage() {
                         {b.payment_status || "No payment"}
                       </span>
                       <span className="font-semibold text-slate-800 dark:text-slate-100 text-sm">₹{b.amount}</span>
-                      <span className="ml-auto text-xs text-slate-400">{formatDt(b.created_at)}</span>
+                      <span className="text-xs text-slate-400">{formatDt(b.created_at)}</span>
+                      <div className="ml-auto">
+                        {b.status === "CONFIRMED" && (
+                          <button
+                            className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            onClick={() => { setCancelMsg(null); setCancelTarget({ type: "booking", bookingId: b.id }); }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Seat chips */}

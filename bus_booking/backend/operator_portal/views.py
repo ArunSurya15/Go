@@ -409,3 +409,91 @@ class OperatorSalesListView(generics.ListAPIView):
                 "results": ser.data,
             }
         )
+
+
+class OperatorCancelBookingView(APIView):
+    """
+    POST /api/operator/schedules/{schedule_id}/bookings/{booking_id}/cancel/
+    Body (optional): { "reason": "...", "refund_pct": 100 }
+    Operator can cancel any booking on their schedule with optional refund override.
+    """
+    permission_classes = [IsAuthenticated, IsOperator]
+
+    def post(self, request, schedule_id, booking_id):
+        operator = get_operator(request)
+        if not operator:
+            return Response({"detail": "Operator account not found."}, status=403)
+        from django.shortcuts import get_object_or_404
+        booking = get_object_or_404(
+            Booking.objects.select_related("schedule", "schedule__bus", "user"),
+            pk=booking_id,
+            schedule_id=schedule_id,
+            schedule__bus__operator=operator,
+        )
+        reason = str(request.data.get("reason") or "")[:255]
+        refund_pct = request.data.get("refund_pct")
+        force_pct = None
+        if refund_pct is not None:
+            try:
+                force_pct = max(0, min(100, int(refund_pct)))
+            except (TypeError, ValueError):
+                return Response({"detail": "refund_pct must be 0–100."}, status=400)
+
+        from bookings.cancellation import cancel_booking
+        try:
+            result = cancel_booking(booking, by="operator", reason=reason, force_refund_pct=force_pct)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=400)
+        return Response(result)
+
+
+class OperatorCancelScheduleView(APIView):
+    """
+    POST /api/operator/schedules/{schedule_id}/cancel/
+    Body (optional): { "reason": "...", "refund_pct": 100 }
+    Cancels all CONFIRMED bookings on a schedule (e.g. bus breakdown).
+    """
+    permission_classes = [IsAuthenticated, IsOperator]
+
+    def post(self, request, schedule_id):
+        operator = get_operator(request)
+        if not operator:
+            return Response({"detail": "Operator account not found."}, status=403)
+        from django.shortcuts import get_object_or_404
+        schedule = get_object_or_404(
+            Schedule.objects.select_related("bus"),
+            pk=schedule_id,
+            bus__operator=operator,
+        )
+        reason = str(request.data.get("reason") or "Schedule cancelled by operator")[:255]
+        refund_pct = request.data.get("refund_pct")
+        force_pct = 100  # default full refund when operator cancels entire schedule
+        if refund_pct is not None:
+            try:
+                force_pct = max(0, min(100, int(refund_pct)))
+            except (TypeError, ValueError):
+                return Response({"detail": "refund_pct must be 0–100."}, status=400)
+
+        bookings = Booking.objects.filter(
+            schedule=schedule, status__in=("CONFIRMED", "PENDING")
+        ).select_related("schedule", "schedule__bus", "user")
+
+        results = []
+        errors = []
+        from bookings.cancellation import cancel_booking
+        for b in bookings:
+            try:
+                results.append(cancel_booking(b, by="operator", reason=reason, force_refund_pct=force_pct))
+            except ValueError as e:
+                errors.append({"booking_id": b.id, "error": str(e)})
+
+        # Mark schedule as CANCELLED
+        schedule.status = "CANCELLED"
+        schedule.save(update_fields=["status"])
+
+        return Response({
+            "schedule_id": schedule_id,
+            "cancelled_bookings": len(results),
+            "errors": errors,
+            "results": results,
+        })

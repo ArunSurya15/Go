@@ -49,24 +49,33 @@ def send_sms(phone: str, message: str) -> bool:
             return False
     if provider == "msg91":
         try:
-            import urllib.request
-            import urllib.parse
+            import json as _json
+            import urllib.request as _req
             auth_key = getattr(settings, "MSG91_AUTH_KEY", "")
-            sender = getattr(settings, "MSG91_SENDER_ID", "e-GO")
-            url = "https://api.msg91.com/api/v5/flow/"
-            data = {
-                "template_id": "",  # MSG91 template
-                "short_url": "0",
-                "recipients": [{"mobiles": phone.lstrip("+"), "otp": message}],
+            sender = getattr(settings, "MSG91_SENDER_ID", "EGOBKS")
+            # Use MSG91 Send API v2 (works for both OTP and transactional SMS)
+            # DLT template_id is required for transactional messages in India.
+            template_id = getattr(settings, "MSG91_BOOKING_TEMPLATE_ID", "") or getattr(settings, "MSG91_OTP_TEMPLATE_ID", "")
+            mobile = phone.lstrip("+")
+            payload = {
+                "sender": sender,
+                "route": "4",  # 4 = transactional
+                "country": "91",
+                "sms": [{"message": message, "to": [mobile]}],
             }
-            req = urllib.request.Request(
-                url,
-                data=urllib.parse.urlencode(data).encode(),
-                headers={"authkey": auth_key, "Content-Type": "application/json"},
+            if template_id:
+                payload["template_id"] = template_id
+            req = _req.Request(
+                "https://api.msg91.com/api/v2/sendsms",
+                data=_json.dumps(payload).encode(),
+                headers={
+                    "authkey": auth_key,
+                    "Content-Type": "application/json",
+                    "User-Agent": "e-GO/1.0",
+                },
                 method="POST",
             )
-            # MSG91 OTP API varies; this is a placeholder. Use their OTP API doc.
-            with urllib.request.urlopen(req) as resp:
+            with _req.urlopen(req, timeout=10) as resp:
                 return resp.status == 200
         except Exception as e:
             logger.exception("MSG91 SMS failed: %s", e)

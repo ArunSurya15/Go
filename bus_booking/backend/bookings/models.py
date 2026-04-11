@@ -128,10 +128,17 @@ class Booking(models.Model):
     boarding_point = models.ForeignKey(BoardingPoint, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
     dropping_point = models.ForeignKey(DroppingPoint, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
     contact_phone = models.CharField(max_length=20, blank=True)
+    contact_email = models.EmailField(max_length=254, blank=True)
     state_of_residence = models.CharField(max_length=100, blank=True)
     whatsapp_opt_in = models.BooleanField(default=False)
     passenger_details = models.TextField(blank=True, default="{}")  # JSON: {"1A": {"gender": "F"}, ...}
     created_at = models.DateTimeField(auto_now_add=True)
+    # Cancellation
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.CharField(max_length=20, blank=True)  # 'passenger' | 'operator' | 'admin'
+    cancellation_reason = models.CharField(max_length=255, blank=True)
+    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    refund_id = models.CharField(max_length=100, blank=True)  # Razorpay refund ID
 
     def __str__(self):
         return f"Booking {self.id} - {self.user} - {self.status}"

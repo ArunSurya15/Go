@@ -22,6 +22,16 @@ load_dotenv(BASE_DIR / '.env')
 RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', '')
 RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', '')
 RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_WEBHOOK_SECRET', '')
+
+# ── Cancellation & refund policy ─────────────────────────────────────────────
+# Hours before departure within which cancellation is still allowed (0 = no restriction)
+CANCEL_CUTOFF_HOURS = int(os.getenv('CANCEL_CUTOFF_HOURS', '0'))
+# Full refund if cancelled this many hours before departure
+CANCEL_FULL_REFUND_HOURS = int(os.getenv('CANCEL_FULL_REFUND_HOURS', '24'))
+# Partial refund (CANCEL_PARTIAL_REFUND_PCT %) if between CANCEL_PARTIAL_REFUND_HOURS and CANCEL_FULL_REFUND_HOURS
+CANCEL_PARTIAL_REFUND_HOURS = int(os.getenv('CANCEL_PARTIAL_REFUND_HOURS', '6'))
+CANCEL_PARTIAL_REFUND_PCT = int(os.getenv('CANCEL_PARTIAL_REFUND_PCT', '50'))
+# Below CANCEL_PARTIAL_REFUND_HOURS → no refund (but cancellation still allowed)
 # Real Razorpay (Test Mode): In .env set RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
 # and DEMO_PAYMENTS=false. In Razorpay Dashboard add webhook URL with event payment.captured.
 DEMO_PAYMENTS = os.getenv('DEMO_PAYMENTS', 'false').lower() == 'true'
@@ -37,8 +47,30 @@ TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', '')
 TWILIO_FROM_NUMBER = os.getenv('TWILIO_FROM_NUMBER', '')
 MSG91_AUTH_KEY = os.getenv('MSG91_AUTH_KEY', '')
 MSG91_SENDER_ID = os.getenv('MSG91_SENDER_ID', 'e-GO')
+# DLT-registered template ID for booking confirmation SMS (required in India for MSG91)
+MSG91_BOOKING_TEMPLATE_ID = os.getenv('MSG91_BOOKING_TEMPLATE_ID', '')
 OTP_TTL_SECONDS = 5 * 60  # 5 min
 OTP_LENGTH = 6
+
+# ── Email notifications (Resend) ─────────────────────────────────────────────
+# Sign up at https://resend.com — free tier is 3,000 emails/month.
+# Set RESEND_API_KEY in .env to enable. Leave blank to skip silently.
+RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
+# The "from" address must be a verified domain in your Resend account.
+# During dev you can use onboarding@resend.dev (only sends to your own email).
+EMAIL_FROM = os.getenv('EMAIL_FROM', 'e-GO Tickets <noreply@resend.dev>')
+# Public URL of your app — used in email links (ticket download, booking page).
+APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://localhost:3000')
+
+# ── WhatsApp notifications ───────────────────────────────────────────────────
+# Provider: 'twilio' or 'meta' or '' (disabled).
+# Twilio: uses TWILIO_* keys above. From number must be whatsapp:+14155238886 (sandbox)
+#         or your approved Twilio WhatsApp number.
+# Meta Cloud API: sign up at https://developers.facebook.com/docs/whatsapp/cloud-api
+WHATSAPP_PROVIDER = os.getenv('WHATSAPP_PROVIDER', '')  # '', 'twilio', 'meta'
+TWILIO_WHATSAPP_FROM = os.getenv('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886')
+META_WHATSAPP_TOKEN = os.getenv('META_WHATSAPP_TOKEN', '')
+META_WHATSAPP_PHONE_ID = os.getenv('META_WHATSAPP_PHONE_ID', '')  # Phone number ID from Meta dashboard
 
 # Optional fallback line on schedule cards when `platform_promo_title` is empty.
 EGO_DEFAULT_PLATFORM_PROMO = os.getenv("EGO_DEFAULT_PLATFORM_PROMO", "")

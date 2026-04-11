@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -10,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BusGo – Book Bus Tickets",
-  description: "Search and book bus tickets easily.",
+  title: "e-GO – Book Bus Tickets",
+  description: "Search and book bus tickets easily across India.",
 };
 
 export default function RootLayout({
@@ -27,6 +28,7 @@ export default function RootLayout({
         <AuthProvider>
           <Header />
           <main className="flex-1">{children}</main>
+          <Footer />
         </AuthProvider>
       </body>
     </html>
