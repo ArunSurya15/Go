@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Shield, Ticket, RefreshCw, UserCheck, Lock, Scale } from "lucide-react";
+import { Shield, Ticket, RefreshCw, UserCheck, Lock, Scale, Package } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Terms of Service - e-GO",
@@ -15,18 +15,29 @@ const sections = [
     points: [
       {
         heading: "Role of e-GO",
-        body: "e-GO is a technology platform that connects passengers with independent bus operators. e-GO does not own or operate any bus, nor does it act as a transport agent. Ticket information — routes, fares, seat availability, amenities — is provided entirely by the respective bus operator.",
+        body: "e-GO is an online ticketing platform. We do not operate our own buses; we partner with licensed operators so you can compare timings, fares, and services. Route, amenity, and seat data is supplied by operators in good faith.",
       },
       {
-        heading: "Limitation of Liability",
+        heading: "What e-GO is responsible for",
         body: null,
         list: [
-          "Delayed or early departure/arrival of the bus",
-          "The conduct of bus operator staff",
-          "Condition of the bus or seats not matching the description",
-          "Trip cancellations by the operator for any reason",
-          "Loss or damage of passenger baggage",
-          "Changes to boarding/dropping points made by the operator",
+          "Issuing a valid e-ticket / booking confirmation recognised by the operator",
+          "Processing refunds and support when you cancel within our published policy",
+          "Providing reasonable customer support for platform, payment, and booking issues",
+        ],
+      },
+      {
+        heading: "What e-GO does not control",
+        body: null,
+        list: [
+          "Buses not departing or arriving on time",
+          "Behaviour of the operator's staff",
+          "Bus seats or onboard conditions not meeting expectations",
+          "Operator cancellations due to weather, breakdowns, or regulatory reasons",
+          "Lost, stolen, or damaged baggage",
+          "Last-minute seat or layout changes made by the operator",
+          "Passengers waiting at the wrong boarding point",
+          "Operators changing boarding points or using feeder vehicles to the main bus",
         ],
         footer: "e-GO's maximum liability in any dispute is limited to the fare amount paid for the affected booking.",
       },
@@ -52,6 +63,18 @@ const sections = [
       {
         heading: "Boarding Requirements",
         body: "Passengers are advised to arrive at the boarding point at least 30 minutes before departure, carry a copy of the ticket, and confirm the exact boarding location directly with the operator.",
+      },
+      {
+        heading: "Departure time",
+        body: "Timings are best-effort; however, the bus will not depart before the time shown on your ticket for the first major boarding segment unless the operator notifies you.",
+      },
+      {
+        heading: "Amenities",
+        body: "Onboard services are configured by the operator. e-GO displays them in good faith; liability for missing amenities rests with the operator.",
+      },
+      {
+        heading: "Confirmation & grievances",
+        body: "If email or SMS is delayed, your booking is considered confirmed once it appears under My Trips after successful payment. Raise claims with our support team within 7 days of your travel date.",
       },
       {
         heading: "Payments",
@@ -99,6 +122,16 @@ const sections = [
   },
   {
     num: "06",
+    Icon: Package,
+    title: "Luggage",
+    list: [
+      "Unless the operator states otherwise, plan for one main bag (about 10 kg) and one small personal item (about 5 kg) such as a laptop bag or handbag.",
+      "Weapons, inflammable materials, drugs, liquor, and smuggled goods are not permitted.",
+      "The operator may refuse boarding or charge extra for baggage beyond permitted limits.",
+    ],
+  },
+  {
+    num: "07",
     Icon: Scale,
     title: "Governing Law",
     body: "These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the competent courts in India. e-GO reserves the right to update these Terms at any time with notice via email or an in-app banner.",
@@ -143,6 +176,12 @@ export default function TermsPage() {
 
       {/* Sections */}
       <div className="mx-auto max-w-4xl px-4 py-10 pb-20 space-y-6">
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100">
+          <p className="font-semibold">Cancellation after departure</p>
+          <p className="mt-1 text-amber-900/90 dark:text-amber-200/90">
+            Cancellation of this ticket is <strong>not</strong> allowed after the scheduled departure time of the bus.
+          </p>
+        </div>
         {sections.map((s) => {
           const Icon = s.Icon;
           return (

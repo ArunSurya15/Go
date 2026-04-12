@@ -13,17 +13,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { booking, ticketDownloadUrl, type Booking } from "@/lib/api";
+import { EgoTicketSheet } from "@/components/ticket/ego-ticket-sheet";
+import { booking, downloadBookingTicketPdf, type Booking } from "@/lib/api";
+
+function isPastDeparture(iso: string) {
+  return new Date(iso) < new Date();
+}
 
 export default function BookingSuccessPage() {
   const params = useParams();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, getValidToken } = useAuth();
   const id = Number(params.id);
-  const [ticketUrl, setTicketUrl] = useState<string | null>(null);
   const [bookingData, setBookingData] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [ticketOpen, setTicketOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (!token || isNaN(id)) {
@@ -31,33 +37,29 @@ export default function BookingSuccessPage() {
       return;
     }
     Promise.all([
-      booking.ticket(token, id).then((res) => setTicketUrl(res.ticket_url)),
-      booking.list(token).then((list) => {
-        const b = list.find((x) => x.id === id);
-        if (b) setBookingData(b);
-      }),
-    ]).catch((err) => setError(err instanceof Error ? err.message : "Failed to load booking."))
+      booking.ticket(token, id).catch(() => undefined),
+      booking.get(token, id).then((b) => setBookingData(b)),
+    ])
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load booking."))
       .finally(() => setLoading(false));
   }, [token, id]);
 
   const handleDownloadTicket = async () => {
-    if (!token) return;
-    const url = ticketDownloadUrl(id);
+    const t = await getValidToken();
+    if (!t) return;
+    setDownloading(true);
+    setError("");
     try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Download failed");
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `ticket_${id}.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      await downloadBookingTicketPdf(t, id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setDownloading(false);
     }
   };
+
+  const trackable =
+    bookingData?.status === "CONFIRMED" && !isPastDeparture(bookingData.schedule.departure_dt);
 
   if (!token) {
     return (
@@ -69,7 +71,14 @@ export default function BookingSuccessPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-md">
+    <div className="container mx-auto max-w-md px-4 py-12">
+      <EgoTicketSheet
+        booking={bookingData}
+        open={ticketOpen && !!bookingData}
+        onClose={() => setTicketOpen(false)}
+        onDownloadPdf={() => void handleDownloadTicket()}
+        downloading={downloading}
+      />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -79,29 +88,35 @@ export default function BookingSuccessPage() {
           <CardHeader>
             <CardTitle className="text-xl">Booking confirmed</CardTitle>
             <CardDescription>
-              Your booking #{id} is confirmed. You can download your ticket below.
+              Your booking #{id} is confirmed. View your ticket or download a PDF copy.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
             {error && <p className="text-sm text-destructive">{error}</p>}
-            {!loading && ticketUrl && (
-              <Button className="w-full" onClick={handleDownloadTicket}>
-                Download ticket (PDF)
-              </Button>
+            {!loading && bookingData?.status === "CONFIRMED" && (
+              <>
+                <Button className="w-full rounded-xl" variant="outline" onClick={() => setTicketOpen(true)}>
+                  Show ticket
+                </Button>
+                <Button className="w-full rounded-xl" onClick={() => void handleDownloadTicket()} disabled={downloading}>
+                  {downloading ? "Preparing…" : "Download ticket (PDF)"}
+                </Button>
+              </>
             )}
-            {bookingData && bookingData.status === "CONFIRMED" && (
-              <Button variant="outline" className="w-full" asChild>
-                <Link href={`/track?schedule_id=${bookingData.schedule.id}`}>
-                  Track bus
-                </Link>
+            {!loading && bookingData && bookingData.status !== "CONFIRMED" && (
+              <p className="text-sm text-muted-foreground">Ticket download is only available for confirmed bookings.</p>
+            )}
+            {trackable && (
+              <Button variant="outline" className="w-full rounded-xl" asChild>
+                <Link href={`/track?schedule_id=${bookingData.schedule.id}`}>Track bus</Link>
               </Button>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" asChild>
-                <Link href="/bookings">My Bookings</Link>
+              <Button variant="outline" className="flex-1 rounded-xl" asChild>
+                <Link href="/bookings">My Trips</Link>
               </Button>
-              <Button variant="outline" className="flex-1" asChild>
+              <Button variant="outline" className="flex-1 rounded-xl" asChild>
                 <Link href="/">Search again</Link>
               </Button>
             </div>

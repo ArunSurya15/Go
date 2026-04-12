@@ -14,6 +14,8 @@ export const metadata: Metadata = {
 const FULL_HOURS = 24;
 const PARTIAL_HOURS = 6;
 const PARTIAL_PCT = 50;
+/** Sample fare for illustration only (same structure as redBus-style table). */
+const SAMPLE_FARE = 1000;
 
 const faqs: Array<{ Icon: React.ElementType; q: string; a: string }> = [
   {
@@ -115,6 +117,69 @@ export default function CancellationPolicyPage() {
               amount="0%"
               bg="bg-gradient-to-br from-slate-500 to-slate-700"
             />
+          </div>
+        </div>
+
+        {/* Cancellation charges (redBus-style reference layout) */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div
+            className="border-b border-slate-200 px-4 py-3 text-base font-bold text-indigo-950 dark:border-slate-700 dark:bg-slate-900 dark:text-indigo-100"
+            style={{ backgroundColor: "#E8EFFF" }}
+          >
+            Cancellation charges
+          </div>
+          <div className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+            Your fee depends on how long before departure you cancel. Amounts below use a sample fare of ₹
+            {SAMPLE_FARE.toLocaleString("en-IN")} — your actual fare may differ.
+          </div>
+          <div className="overflow-x-auto px-2 pb-4 sm:px-4">
+            <table className="w-full min-w-[280px] border-collapse text-sm">
+              <thead>
+                <tr className="border border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-800/80">
+                  <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-slate-900 dark:border-slate-600 dark:text-slate-100">
+                    Cancellation time
+                  </th>
+                  <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-slate-900 dark:border-slate-600 dark:text-slate-100">
+                    Cancellation charges
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-800 dark:text-slate-200">
+                <tr>
+                  <td className="border border-slate-300 px-3 py-2 dark:border-slate-600">
+                    More than {FULL_HOURS}h before departure
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 dark:border-slate-600">
+                    ₹0 <span className="text-slate-500">(full refund)</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-300 px-3 py-2 dark:border-slate-600">
+                    Between {PARTIAL_HOURS}h and {FULL_HOURS}h before departure
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 dark:border-slate-600">
+                    ₹{Math.round((SAMPLE_FARE * (100 - PARTIAL_PCT)) / 100).toLocaleString("en-IN")}{" "}
+                    <span className="text-slate-500">
+                      ({100 - PARTIAL_PCT}% of fare — you receive {PARTIAL_PCT}% back)
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border border-slate-300 px-3 py-2 dark:border-slate-600">
+                    Less than {PARTIAL_HOURS}h before departure
+                  </td>
+                  <td className="border border-slate-300 px-3 py-2 dark:border-slate-600">
+                    ₹{SAMPLE_FARE.toLocaleString("en-IN")}{" "}
+                    <span className="text-slate-500">(no refund)</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="space-y-2 border-t border-slate-100 px-4 py-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <p>· Cancellation charges are computed on a per-booking (total fare) basis.</p>
+            <p>· For multi-seat bookings, cancelling cancels the entire booking together.</p>
+            <p>· Note: amounts shown exclude payment gateway differences; GST treatment follows your invoice.</p>
           </div>
         </div>
 

@@ -1,39 +1,160 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { booking, type Booking, type CancelPreview } from "@/lib/api";
+import { booking, downloadBookingTicketPdf, type Booking, type CancelPreview } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bus, Calendar, Ticket, X, AlertTriangle, CheckCircle } from "lucide-react";
+import { EgoTicketSheet } from "@/components/ticket/ego-ticket-sheet";
+import {
+  Bus,
+  Calendar,
+  Download,
+  MapPin,
+  Plus,
+  Sparkles,
+  X,
+  AlertTriangle,
+  CheckCircle,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
-    CONFIRMED: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    PENDING: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-    CANCELLED: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
-    REFUNDED: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    CONFIRMED:
+      "bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/30 dark:bg-emerald-600 dark:text-white dark:ring-emerald-500/40",
+    PENDING:
+      "bg-amber-500/12 text-amber-900 ring-1 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-500/25",
+    CANCELLED: "bg-slate-100 text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700",
+    REFUNDED: "bg-sky-500/12 text-sky-900 ring-1 ring-sky-500/20 dark:bg-sky-500/15 dark:text-sky-200 dark:ring-sky-500/25",
   };
   return (
-    <span className={`rounded-full px-3 py-1 text-xs font-medium ${map[status] ?? "bg-slate-100 text-slate-600"}`}>
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+        map[status] ?? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+      )}
+    >
       {status.charAt(0) + status.slice(1).toLowerCase()}
     </span>
   );
 }
 
-function formatDt(iso: string) {
+function formatTripWhen(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-    + " " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  return {
+    date: d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+    time: d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
+  };
 }
 
 function isPast(iso: string) {
   return new Date(iso) < new Date();
 }
+
+/** Golden-ticket style mark (unique gradient id per instance for list pages). */
+function GoldenTicketGlyph({ className }: { className?: string }) {
+  const rid = useId().replace(/:/g, "");
+  const gid = `gtg-${rid}`;
+  return (
+    <svg className={className} viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <defs>
+        <linearGradient id={gid} x1="2" y1="3" x2="20" y2="19" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#fffbeb" />
+          <stop offset="0.35" stopColor="#fcd34d" />
+          <stop offset="0.7" stopColor="#f59e0b" />
+          <stop offset="1" stopColor="#b45309" />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${gid})`}
+        stroke="#92400e"
+        strokeWidth="0.55"
+        strokeLinejoin="round"
+        d="M4.2 6.4h13.6c.75 0 1.35.6 1.35 1.35v2.15a1.55 1.55 0 010 3.1v2.15c0 .75-.6 1.35-1.35 1.35H4.2c-.75 0-1.35-.6-1.35-1.35v-2.15a1.55 1.55 0 010-3.1V7.75c0-.75.6-1.35 1.35-1.35z"
+      />
+      <path stroke="#78350f" strokeWidth="0.45" strokeDasharray="1.15 1.15" strokeLinecap="round" d="M11 6.85v8.3" opacity="0.55" />
+      <circle cx="11" cy="9.1" r="0.45" fill="#78350f" />
+      <circle cx="11" cy="11" r="0.45" fill="#78350f" />
+      <circle cx="11" cy="12.9" r="0.45" fill="#78350f" />
+      <path
+        fill="#fef3c7"
+        fillOpacity="0.85"
+        d="M7.2 9.2h1.9v3.6H7.2a.55.55 0 01-.55-.55V9.75c0-.3.25-.55.55-.55zm6.7 0h1.9c.3 0 .55.25.55.55v2.5a.55.55 0 01-.55.55h-1.9V9.2z"
+      />
+    </svg>
+  );
+}
+
+/** Two map pins linked by a winding route (journey / live track). */
+function TrackRouteGlyph({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("text-sky-800 dark:text-sky-200", className)}
+      viewBox="0 0 22 22"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M 5.35 8.55 C 10.2 8.35 11.5 10.8 9.85 12.85 C 8.35 14.7 12.8 16.1 16.65 16.55"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="5.35" cy="8.55" r="0.72" fill="currentColor" />
+      <circle cx="16.65" cy="16.55" r="0.72" fill="currentColor" />
+      <g stroke="currentColor" strokeWidth="1.05" strokeLinejoin="round" strokeLinecap="round">
+        <path
+          fill="none"
+          d="M 5.35 2.55 c-1.22 0-2.2.98-2.2 2.2 0 1.85 2.2 4.45 2.2 4.45 s2.2-2.6 2.2-4.45 c0-1.22-.98-2.2-2.2-2.2z"
+        />
+        <circle cx="5.35" cy="4.75" r="0.88" fill="none" />
+      </g>
+      <g stroke="currentColor" strokeWidth="1.05" strokeLinejoin="round" strokeLinecap="round">
+        <path
+          fill="none"
+          d="M 16.65 10.55 c-1.22 0-2.2.98-2.2 2.2 0 1.85 2.2 4.45 2.2 4.45 s2.2-2.6 2.2-4.45 c0-1.22-.98-2.2-2.2-2.2z"
+        />
+        <circle cx="16.65" cy="12.75" r="0.88" fill="none" />
+      </g>
+    </svg>
+  );
+}
+
+const tripTicketBtnClass = cn(
+  "h-10 gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-amber-100/50 px-3 pl-2.5 text-sm font-semibold text-amber-950 shadow-sm shadow-amber-200/30",
+  "transition-all hover:-translate-y-px hover:border-amber-300/90 hover:from-amber-100 hover:via-white hover:to-amber-50 hover:shadow-md hover:shadow-amber-300/40",
+  "active:translate-y-0 active:shadow-sm",
+  "focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-2",
+  "dark:border-amber-700/55 dark:from-amber-950/50 dark:via-slate-900 dark:to-amber-950/30 dark:text-amber-50",
+  "dark:hover:border-amber-600 dark:hover:from-amber-900/60 dark:hover:shadow-amber-900/30 dark:focus-visible:ring-amber-500/40"
+);
+
+const tripTrackBtnClass = cn(
+  "h-10 gap-2 rounded-xl border border-sky-200/90 bg-gradient-to-br from-sky-50 via-white to-indigo-50/60 px-3 pl-2.5 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-200/25",
+  "transition-all hover:-translate-y-px hover:border-sky-300/90 hover:from-sky-100 hover:via-white hover:to-indigo-50/80 hover:shadow-md hover:shadow-sky-200/35",
+  "active:translate-y-0 active:shadow-sm",
+  "focus-visible:ring-2 focus-visible:ring-sky-400/45 focus-visible:ring-offset-2",
+  "dark:border-sky-800/80 dark:from-sky-950/45 dark:via-slate-900 dark:to-indigo-950/40 dark:text-sky-100",
+  "dark:hover:border-sky-600 dark:hover:from-sky-900/55 dark:hover:shadow-sky-950/40 dark:focus-visible:ring-sky-500/40"
+);
+
+const tripDownloadBtnClass = cn(
+  "h-10 gap-2 rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-slate-100/50 px-3 pl-2.5 text-sm font-semibold text-slate-800 shadow-sm",
+  "transition-all hover:-translate-y-px hover:border-slate-300 hover:from-slate-100 hover:via-white hover:to-slate-50 hover:shadow-md",
+  "active:translate-y-0 active:shadow-sm",
+  "focus-visible:ring-2 focus-visible:ring-slate-400/40 focus-visible:ring-offset-2",
+  "disabled:pointer-events-none disabled:opacity-60",
+  "dark:border-slate-600 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100",
+  "dark:hover:border-slate-500 dark:hover:bg-slate-800"
+);
+
+const tripActionIconWrap = "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-black/5 dark:ring-white/10";
 
 // ── cancel modal ──────────────────────────────────────────────────────────────
 
@@ -49,8 +170,8 @@ function CancelModal({ preview, onConfirm, onClose, loading }: {
   const pct = amount > 0 ? Math.round((refund / amount) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-start justify-between">
           <h2 className="text-lg font-semibold">Cancel booking</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
@@ -127,6 +248,22 @@ export default function MyBookingsPage() {
   const [cancelBookingId, setCancelBookingId] = useState<number | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<{ id: number; msg: string; ok: boolean } | null>(null);
+  const [ticketSheet, setTicketSheet] = useState<Booking | null>(null);
+  const [downloadBusyId, setDownloadBusyId] = useState<number | null>(null);
+
+  const handleDownloadPdf = async (id: number) => {
+    const t = await getValidToken();
+    if (!t) return;
+    setDownloadBusyId(id);
+    setError("");
+    try {
+      await downloadBookingTicketPdf(t, id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setDownloadBusyId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     const t = await getValidToken();
@@ -193,14 +330,28 @@ export default function MyBookingsPage() {
 
   if (!token || loading) {
     return (
-      <div className="container mx-auto px-4 py-12 text-center text-muted-foreground">
-        {!token ? "Please log in." : "Loading bookings…"}
+      <div className="container mx-auto flex min-h-[40vh] max-w-3xl flex-col items-center justify-center gap-3 px-4 py-16 text-muted-foreground">
+        {!token ? (
+          "Please log in."
+        ) : (
+          <>
+            <div className="h-9 w-9 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin dark:border-indigo-900 dark:border-t-indigo-400" />
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Loading your trips…</p>
+          </>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl space-y-4 pb-16">
+    <div className="container mx-auto max-w-3xl space-y-6 px-4 py-8 pb-20">
+      <EgoTicketSheet
+        booking={ticketSheet}
+        open={!!ticketSheet}
+        onClose={() => setTicketSheet(null)}
+        onDownloadPdf={() => ticketSheet && void handleDownloadPdf(ticketSheet.id)}
+        downloading={ticketSheet ? downloadBusyId === ticketSheet.id : false}
+      />
       {cancelPreview && cancelBookingId && (
         <CancelModal
           preview={cancelPreview}
@@ -210,112 +361,229 @@ export default function MyBookingsPage() {
         />
       )}
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">My Trips</h1>
-        <Button asChild size="sm"><Link href="/">+ New booking</Link></Button>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            <Sparkles className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+            Your bookings
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">My Trips</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Tickets, live tracking, and cancellations in one place.</p>
+        </div>
+        <Button
+          asChild
+          className="shrink-0 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 font-semibold shadow-md shadow-indigo-600/20 hover:from-indigo-700 hover:to-violet-700"
+        >
+          <Link href="/" className="inline-flex items-center gap-1.5">
+            <Plus className="h-4 w-4" aria-hidden />
+            New booking
+          </Link>
+        </Button>
       </div>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          {error}
+        </p>
+      )}
 
       {/* Tabs */}
-      <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden w-fit">
+      <div className="inline-flex rounded-full border border-slate-200/90 bg-slate-50/80 p-1 shadow-inner dark:border-slate-700 dark:bg-slate-900/60">
         {(["upcoming", "past"] as const).map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => setTab(t)}
-            className={`px-5 py-2 text-sm font-medium transition-colors ${
-              tab === t ? "bg-indigo-600 text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-            }`}
+            className={cn(
+              "rounded-full px-4 py-2 text-sm font-semibold transition-all",
+              tab === t
+                ? "bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-300"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+            )}
           >
-            {t === "upcoming" ? `Upcoming (${upcoming.length})` : `Past & cancelled (${past.length})`}
+            {t === "upcoming" ? (
+              <>
+                Upcoming <span className="ml-1 tabular-nums text-slate-400 dark:text-slate-500">({upcoming.length})</span>
+              </>
+            ) : (
+              <>
+                Past &amp; cancelled{" "}
+                <span className="ml-1 tabular-nums text-slate-400 dark:text-slate-500">({past.length})</span>
+              </>
+            )}
           </button>
         ))}
       </div>
 
+      <p className="text-center text-xs text-slate-400 dark:text-slate-500">
+        Past &amp; cancelled shows your <span className="font-semibold text-slate-500 dark:text-slate-400">10 most recent</span> trips.
+        Older bookings stay on record; contact support if you need history beyond that.
+      </p>
+
       {displayed.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <p className="mb-4">{tab === "upcoming" ? "No upcoming trips." : "No past bookings."}</p>
-            {tab === "upcoming" && <Button asChild><Link href="/">Search buses</Link></Button>}
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-dashed border-indigo-200/60 bg-gradient-to-b from-white to-indigo-50/40 px-6 py-14 text-center dark:border-indigo-900/40 dark:from-slate-900 dark:to-indigo-950/20">
+          <MapPin className="mx-auto mb-3 h-10 w-10 text-indigo-200 dark:text-indigo-900" />
+          <p className="font-medium text-slate-800 dark:text-slate-100">
+            {tab === "upcoming" ? "No upcoming trips" : "No past bookings here"}
+          </p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+            {tab === "upcoming" ? "Book a bus from the home page — your trips will show up here." : "When trips finish or you cancel, they appear in this tab."}
+          </p>
+          {tab === "upcoming" && (
+            <Button asChild className="mt-6 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md">
+              <Link href="/">Search buses</Link>
+            </Button>
+          )}
+        </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {displayed.map((b) => {
           const route = b.schedule.route;
+          const bus = b.schedule.bus;
+          const serviceLine = (bus.service_name || "").trim();
+          const when = formatTripWhen(b.schedule.departure_dt);
           const canCancel = b.status === "CONFIRMED" && !isPast(b.schedule.departure_dt);
           const msg = cancelMsg?.id === b.id ? cancelMsg : null;
+          const muted = b.status === "CANCELLED" || b.status === "REFUNDED";
           return (
-            <Card key={b.id} className={`transition-shadow hover:shadow-md ${b.status === "CANCELLED" || b.status === "REFUNDED" ? "opacity-75" : ""}`}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <CardTitle className="text-base truncate">
-                      {route.origin} → {route.destination}
-                    </CardTitle>
-                    <CardDescription className="text-xs mt-0.5">
-                      PNR: EGO{String(b.id).padStart(7, "0")} · {b.schedule.bus.operator_name}
-                    </CardDescription>
-                  </div>
-                  {statusBadge(b.status)}
+            <div
+              key={b.id}
+              className={cn(
+                "overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm ring-1 ring-slate-200/40 transition-all hover:border-indigo-200/60 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/80 dark:ring-slate-800/50 dark:hover:border-indigo-900/50",
+                muted && "opacity-[0.88]"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3 px-4 pb-2 pt-3 sm:px-5 sm:pt-4">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    {route.origin} → {route.destination}
+                  </p>
+                  {serviceLine ? (
+                    <p className="mt-0.5 truncate text-xs font-medium text-slate-500 dark:text-slate-400">{serviceLine}</p>
+                  ) : null}
+                  <p className="mt-1 font-mono text-[11px] text-slate-500 dark:text-slate-500">
+                    PNR EGO{String(b.id).padStart(7, "0")} · {bus.operator_name}
+                  </p>
                 </div>
-              </CardHeader>
+                {statusBadge(b.status)}
+              </div>
 
-              <CardContent className="space-y-3 pt-0">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                    <Calendar className="h-3.5 w-3.5 shrink-0" />
-                    <span>{formatDt(b.schedule.departure_dt)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-                    <Bus className="h-3.5 w-3.5 shrink-0" />
-                    <span>{b.seats.join(", ")}</span>
-                  </div>
+              <div className="grid grid-cols-1 gap-2 border-y border-slate-100/90 bg-slate-50/50 px-4 py-2.5 text-sm dark:border-slate-800 dark:bg-slate-950/30 sm:grid-cols-2 sm:px-5">
+                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm dark:bg-slate-800">
+                    <Calendar className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+                  </span>
+                  <span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{when.date}</span>
+                    <span className="text-slate-400"> · {when.time}</span>
+                  </span>
                 </div>
+                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 sm:justify-end">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm dark:bg-slate-800 sm:order-2">
+                    <Bus className="h-4 w-4 text-violet-500 dark:text-violet-400" />
+                  </span>
+                  <span className="font-medium tabular-nums text-slate-800 dark:text-slate-200 sm:order-1">{b.seats.join(", ")}</span>
+                </div>
+              </div>
 
-                {/* Refund info for cancelled bookings */}
-                {(b.status === "REFUNDED" || b.status === "CANCELLED") && (
-                  <div className={`rounded-lg px-3 py-2 text-xs ${b.status === "REFUNDED" ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300" : "bg-slate-50 dark:bg-slate-800 text-slate-500"}`}>
-                    {b.status === "REFUNDED" ? "✅ Refund processed" : "❌ Cancelled — no refund"}
-                  </div>
-                )}
+              {(b.status === "REFUNDED" || b.status === "CANCELLED") && (
+                <div
+                  className={cn(
+                    "mx-4 mt-2 rounded-xl px-3 py-2 text-xs sm:mx-5",
+                    b.status === "REFUNDED"
+                      ? "bg-sky-50 text-sky-800 dark:bg-sky-950/30 dark:text-sky-200"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-400"
+                  )}
+                >
+                  {b.status === "REFUNDED" ? "Refund processed" : "Cancelled — no refund"}
+                </div>
+              )}
 
-                {/* Cancel message */}
-                {msg && (
-                  <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${msg.ok ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400" : "bg-red-50 dark:bg-red-900/20 text-red-600"}`}>
-                    {msg.ok ? <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />}
-                    {msg.msg}
-                  </div>
-                )}
+              {msg && (
+                <div
+                  className={cn(
+                    "mx-4 mt-2 flex items-start gap-2 rounded-xl px-3 py-2 text-xs sm:mx-5",
+                    msg.ok
+                      ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-200"
+                      : "bg-red-50 text-red-700 dark:bg-red-950/25 dark:text-red-300"
+                  )}
+                >
+                  {msg.ok ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+                  {msg.msg}
+                </div>
+              )}
 
-                <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-base font-semibold">₹{b.amount}</p>
-                  <div className="flex gap-2">
-                    {b.status === "CONFIRMED" && (
-                      <>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/booking/${b.id}`}><Ticket className="h-3.5 w-3.5 mr-1" />Ticket</Link>
-                        </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/track?schedule_id=${b.schedule.id}`}>Track</Link>
-                        </Button>
-                      </>
-                    )}
-                    {canCancel && (
+              <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3">
+                <p className="text-lg font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">₹{b.amount}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {b.status === "CONFIRMED" && (
+                    <>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="sm"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        onClick={() => openCancelModal(b.id)}
+                        className={tripTicketBtnClass}
+                        onClick={() => setTicketSheet(b)}
                       >
-                        Cancel
+                        <span
+                          className={cn(
+                            tripActionIconWrap,
+                            "bg-gradient-to-br from-amber-100 to-amber-200/90 dark:from-amber-900/90 dark:to-amber-950"
+                          )}
+                        >
+                          <GoldenTicketGlyph className="h-[22px] w-[22px] drop-shadow-sm" />
+                        </span>
+                        Show ticket
                       </Button>
-                    )}
-                  </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={tripDownloadBtnClass}
+                        disabled={downloadBusyId === b.id}
+                        onClick={() => void handleDownloadPdf(b.id)}
+                      >
+                        <span
+                          className={cn(
+                            tripActionIconWrap,
+                            "bg-gradient-to-br from-slate-100 to-slate-200/90 dark:from-slate-800 dark:to-slate-900"
+                          )}
+                        >
+                          <Download className="h-4 w-4 text-slate-700 dark:text-slate-200" aria-hidden />
+                        </span>
+                        PDF
+                      </Button>
+                      {!isPast(b.schedule.departure_dt) && (
+                        <Button variant="ghost" size="sm" asChild className={tripTrackBtnClass}>
+                          <Link href={`/track?schedule_id=${b.schedule.id}`} className="inline-flex items-center gap-2">
+                            <span
+                              className={cn(
+                                tripActionIconWrap,
+                                "bg-gradient-to-br from-sky-100 to-indigo-100 dark:from-sky-900/90 dark:to-indigo-950"
+                              )}
+                            >
+                              <TrackRouteGlyph className="h-[22px] w-[22px]" />
+                            </span>
+                            Track
+                          </Link>
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {canCancel && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                      onClick={() => openCancelModal(b.id)}
+                    >
+                      Cancel
+                    </Button>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           );
         })}
       </div>

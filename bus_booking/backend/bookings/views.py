@@ -4,7 +4,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.shortcuts import get_object_or_404
-from django.db.models import Prefetch
+from django.db.models import Case, IntegerField, Prefetch, Q, Value, When
 from rest_framework.views import APIView
 
 from common.models import RoutePatternStop
@@ -498,15 +498,64 @@ class PaymentWebhookView(generics.GenericAPIView):
         return Response({'ok': True})
 
 class BookingListView(generics.ListAPIView):
-    """GET: List authenticated user's bookings."""
+    """
+    GET: List authenticated user's bookings.
+
+    Upcoming (future departure, not cancelled/refunded) are unlimited, ordered by departure.
+    Past / cancelled / refunded rows are capped at the 10 most recent by departure (redBus-style).
+    """
+
     permission_classes = [IsAuthenticated]
     serializer_class = BookingSerializer
+    queryset = Booking.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        user = request.user
+        now = timezone.now()
+        base = Booking.objects.filter(user=user).select_related(
+            "schedule",
+            "schedule__route",
+            "schedule__bus",
+            "schedule__bus__operator",
+            "boarding_point",
+            "dropping_point",
+        )
+        upcoming_q = Q(schedule__departure_dt__gte=now) & ~Q(status__in=["CANCELLED", "REFUNDED"])
+        past_q = Q(schedule__departure_dt__lt=now) | Q(status__in=["CANCELLED", "REFUNDED"])
+
+        upcoming_ids = list(
+            base.filter(upcoming_q).order_by("schedule__departure_dt").values_list("pk", flat=True)
+        )
+        past_ids = list(
+            base.filter(past_q).order_by("-schedule__departure_dt").values_list("pk", flat=True)[:10]
+        )
+        all_ids = upcoming_ids + past_ids
+        if not all_ids:
+            return Response([])
+
+        whens = [When(pk=pk, then=Value(i)) for i, pk in enumerate(all_ids)]
+        preserve = Case(*whens, output_field=IntegerField())
+        qs = base.filter(pk__in=all_ids).order_by(preserve)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class BookingDetailView(generics.RetrieveAPIView):
+    """GET: one booking for the current user (not subject to the past-10 list cap)."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = BookingSerializer
+    lookup_field = "pk"
 
     def get_queryset(self):
         return Booking.objects.filter(user=self.request.user).select_related(
-            'schedule', 'schedule__route', 'schedule__bus', 'schedule__bus__operator',
-            'boarding_point', 'dropping_point'
-        ).order_by('-created_at')
+            "schedule",
+            "schedule__route",
+            "schedule__bus",
+            "schedule__bus__operator",
+            "boarding_point",
+            "dropping_point",
+        )
 
 
 class TicketView(generics.RetrieveAPIView):
@@ -548,25 +597,34 @@ class TicketDownloadView(generics.RetrieveAPIView):
         booking = self.get_object()
         if booking.user_id != request.user.id:
             return Response({'detail': 'Forbidden'}, status=403)
-        
+
+        if booking.status != "CONFIRMED":
+            return Response({"detail": "Ticket not available for this booking."}, status=400)
+
         if not booking.ticket_file:
-            return Response({'detail': 'Ticket not found'}, status=404)
-        
-        # Serve the PDF file
+            from .ticket_generator import save_ticket_to_booking
+
+            try:
+                filename = save_ticket_to_booking(booking)
+                booking.ticket_file = filename
+                booking.save(update_fields=["ticket_file"])
+            except Exception as e:
+                return Response({"detail": f"Failed to generate ticket: {str(e)}"}, status=500)
+
         import os
         from django.http import FileResponse
         from django.conf import settings
-        
-        filepath = os.path.join(settings.BASE_DIR, 'tickets', booking.ticket_file)
+
+        filepath = os.path.join(settings.BASE_DIR, "tickets", booking.ticket_file)
         if not os.path.exists(filepath):
-            return Response({'detail': 'Ticket file not found'}, status=404)
-        
+            return Response({"detail": "Ticket file not found"}, status=404)
+
         response = FileResponse(
-            open(filepath, 'rb'),
-            content_type='application/pdf',
-            filename=booking.ticket_file
+            open(filepath, "rb"),
+            content_type="application/pdf",
+            filename=booking.ticket_file,
         )
-        response['Content-Disposition'] = f'attachment; filename="{booking.ticket_file}"'
+        response["Content-Disposition"] = f'attachment; filename="{booking.ticket_file}"'
         return response
 
 

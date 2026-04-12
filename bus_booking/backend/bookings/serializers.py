@@ -66,6 +66,24 @@ class DroppingPointSerializer(serializers.ModelSerializer):
         model = DroppingPoint
         fields = ('id', 'schedule', 'time', 'location_name', 'description')
 
+
+class BoardingPointNestedSerializer(serializers.ModelSerializer):
+    """Nested on booking (no schedule FK)."""
+
+    time = serializers.TimeField(format='%H:%M')
+
+    class Meta:
+        model = BoardingPoint
+        fields = ('id', 'time', 'location_name', 'landmark')
+
+
+class DroppingPointNestedSerializer(serializers.ModelSerializer):
+    time = serializers.TimeField(format='%H:%M')
+
+    class Meta:
+        model = DroppingPoint
+        fields = ('id', 'time', 'location_name', 'description')
+
 class ReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
@@ -75,12 +93,37 @@ class ReservationSerializer(serializers.ModelSerializer):
 class BookingSerializer(serializers.ModelSerializer):
     seats = serializers.ListField(child=serializers.CharField(), required=False)
     schedule = ScheduleSerializer(read_only=True)
+    boarding_point = BoardingPointNestedSerializer(read_only=True, allow_null=True)
+    dropping_point = DroppingPointNestedSerializer(read_only=True, allow_null=True)
+    passenger_details = serializers.SerializerMethodField()
+    passenger_display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
-        fields = ('id', 'user', 'schedule', 'seats', 'amount', 'status', 'payment_id',
-                  'boarding_point', 'dropping_point', 'contact_phone', 'state_of_residence', 'whatsapp_opt_in', 'created_at')
+        fields = (
+            'id', 'user', 'schedule', 'seats', 'amount', 'status', 'payment_id',
+            'boarding_point', 'dropping_point', 'contact_phone', 'state_of_residence',
+            'whatsapp_opt_in', 'created_at', 'passenger_details', 'passenger_display_name',
+        )
         read_only_fields = ('user', 'status', 'payment_id', 'created_at')
+
+    def get_passenger_details(self, obj):
+        try:
+            return json.loads(obj.passenger_details or '{}')
+        except Exception:
+            return {}
+
+    def get_passenger_display_name(self, obj):
+        try:
+            d = json.loads(obj.passenger_details or '{}')
+            for key in sorted(d.keys()):
+                name = (d.get(key) or {}).get('name') or ''
+                if str(name).strip():
+                    return str(name).strip()
+        except Exception:
+            pass
+        u = obj.user
+        return u.get_full_name() or getattr(u, 'username', '') or 'Passenger'
 
     def to_representation(self, instance):
         import json

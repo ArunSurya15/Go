@@ -120,7 +120,9 @@ export default function PassengerPage() {
         if (!validToken) return;
         const bookings = await booking.list(validToken);
         if (!cancelled && bookings.length > 0) {
-          const last = bookings[0];
+          const last = [...bookings].sort(
+            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0];
           if (!phone && last.contact_phone) setPhone(last.contact_phone);
           if (!email && last.state_of_residence) setState(last.state_of_residence);
         }
