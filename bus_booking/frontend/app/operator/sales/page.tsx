@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { OperationsGate } from "@/app/operator/capability-gates";
 import { operatorApi, type OperatorSalesResponse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,6 +149,7 @@ export default function OperatorSalesPage() {
   };
 
   return (
+    <OperationsGate>
     <div className="mx-auto max-w-5xl space-y-6 pb-16">
       <div>
         <Link
@@ -338,5 +340,6 @@ export default function OperatorSalesPage() {
         </Link>
       </div>
     </div>
+    </OperationsGate>
   );
 }

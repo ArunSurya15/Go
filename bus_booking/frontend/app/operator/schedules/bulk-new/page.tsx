@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { OperationsGate } from "@/app/operator/capability-gates";
 import { operatorApi, routes as routesApi, type OperatorBus, type Route } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,10 +114,17 @@ export default function BulkNewSchedulesPage() {
     }
   };
 
-  if (loading) return <div className="py-16 text-center text-slate-500">Loading…</div>;
+  if (loading) {
+    return (
+      <OperationsGate>
+        <div className="py-16 text-center text-slate-500">Loading…</div>
+      </OperationsGate>
+    );
+  }
 
   if (result) {
     return (
+      <OperationsGate>
       <div className="mx-auto max-w-lg py-16 text-center space-y-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 mx-auto">
           <CheckCircle className="h-8 w-8 text-emerald-600" />
@@ -140,10 +148,12 @@ export default function BulkNewSchedulesPage() {
           <Button variant="outline" onClick={() => setResult(null)}>Create more</Button>
         </div>
       </div>
+      </OperationsGate>
     );
   }
 
   return (
+    <OperationsGate>
     <div className="mx-auto max-w-2xl space-y-6 pb-16">
       <div>
         <Link href="/operator/schedules" className="text-sm text-slate-500 hover:text-indigo-600">
@@ -288,5 +298,6 @@ export default function BulkNewSchedulesPage() {
         </CardContent>
       </Card>
     </div>
+    </OperationsGate>
   );
 }

@@ -111,6 +111,7 @@ class OperatorRegisterSerializer(serializers.Serializer):
             role="OPERATOR",
             phone=phone or "",
             operator=operator,
+            operator_staff_role="OWNER",
             is_active=True,
         )
         user.set_password(password)

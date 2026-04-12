@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useOperatorSession } from "@/app/operator/operator-session";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -165,6 +166,8 @@ function TripTableHeader() {
 export default function OperatorDashboardPage() {
   const router = useRouter();
   const { getValidToken } = useAuth();
+  const { canManageOperations, canManageCompany } = useOperatorSession();
+  const [staffNotice, setStaffNotice] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [profile, setProfile] = useState<OperatorProfile | null>(null);
   const [summaryDate, setSummaryDate] = useState(localYMD);
@@ -219,6 +222,15 @@ export default function OperatorDashboardPage() {
   }, [load]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("mode") === "staff") {
+      setStaffNotice(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     setFOrigin("");
     setFDest("");
     setFServiceId("");
@@ -252,6 +264,24 @@ export default function OperatorDashboardPage() {
   }, [stats?.today_trips, fOrigin, fDest, fServiceId, fBusType, fStatus]);
 
   const filtersActive = !!(fOrigin || fDest || fServiceId || fBusType || fStatus);
+
+  const quickActions = useMemo(() => {
+    const all = [
+      { label: "Add a bus", href: "/operator/buses/new", Icon: PlusCircle, color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 dark:text-indigo-300", tier: "ops" as const },
+      { label: "New schedule", href: "/operator/schedules/new", Icon: CalendarPlus, color: "text-violet-600 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-300", tier: "ops" as const },
+      { label: "Sales & revenue", href: "/operator/sales", Icon: DollarSign, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40", tier: "ops" as const },
+      { label: "All schedules", href: "/operator/schedules", Icon: LayoutList, color: "text-sky-600 bg-sky-50 dark:bg-sky-900/40", tier: "all" as const },
+      { label: "Manifests", href: "/operator/schedules", Icon: FileText, color: "text-amber-600 bg-amber-50 dark:bg-amber-900/40", tier: "all" as const },
+      { label: "Team & invites", href: "/operator/team", Icon: Users, color: "text-indigo-700 bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-200", tier: "company" as const },
+      { label: "Profile & KYC", href: "/operator/onboarding", Icon: UserCog, color: "text-slate-600 bg-slate-100 dark:bg-slate-800", tier: "company" as const },
+    ];
+    return all.filter(
+      (a) =>
+        a.tier === "all" ||
+        (a.tier === "ops" && canManageOperations) ||
+        (a.tier === "company" && canManageCompany)
+    );
+  }, [canManageOperations, canManageCompany]);
 
   const todayLabel = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
@@ -306,18 +336,27 @@ export default function OperatorDashboardPage() {
         </div>
       </div>
 
+      {staffNotice && !canManageOperations && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+          You have <strong className="font-semibold">dispatcher</strong> access: view trips and bookings only. Fare changes and refunds need a manager or owner; company profile and invites are owner-only.
+        </div>
+      )}
+
       {/* Action banners (KYC / pending trips) — similar to redBus agreement alerts */}
       {profile?.kyc_status === "PENDING" && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200/90 bg-gradient-to-r from-rose-50 to-orange-50 px-4 py-3.5 text-sm text-rose-950 shadow-sm dark:border-rose-900/50 dark:from-rose-950/40 dark:to-orange-950/20 dark:text-rose-100">
           <span className="max-w-3xl leading-relaxed">
             <strong className="font-semibold">KYC pending.</strong> Finish your business profile so we can verify you — you&apos;ll get full publishing once cleared.
+            {!canManageCompany && " Ask a business owner to complete onboarding."}
           </span>
-          <Link
-            href="/operator/onboarding"
-            className="shrink-0 rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 dark:bg-rose-700 dark:hover:bg-rose-600"
-          >
-            Complete profile
-          </Link>
+          {canManageCompany ? (
+            <Link
+              href="/operator/onboarding"
+              className="shrink-0 rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 dark:bg-rose-700 dark:hover:bg-rose-600"
+            >
+              Complete profile
+            </Link>
+          ) : null}
         </div>
       )}
       {kpi && kpi.pending_approval > 0 && (
@@ -453,11 +492,13 @@ export default function OperatorDashboardPage() {
           <div className="px-5 py-12 text-center">
             <Bus className="h-10 w-10 text-slate-200 dark:text-slate-700 mx-auto mb-3" />
             <p className="text-sm text-slate-500">No departures on this date.</p>
-            <Link href="/operator/schedules/new">
-              <Button size="sm" className="mt-4 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md shadow-indigo-600/20 hover:from-indigo-700 hover:to-violet-700">
-                Add a schedule
-              </Button>
-            </Link>
+            {canManageOperations ? (
+              <Link href="/operator/schedules/new">
+                <Button size="sm" className="mt-4 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md shadow-indigo-600/20 hover:from-indigo-700 hover:to-violet-700">
+                  Add a schedule
+                </Button>
+              </Link>
+            ) : null}
           </div>
         ) : (
           <>
@@ -606,14 +647,7 @@ export default function OperatorDashboardPage() {
       <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50/90 via-white/60 to-indigo-50/40 p-5 shadow-sm dark:border-slate-800 dark:from-slate-900/50 dark:via-slate-950/40 dark:to-indigo-950/20">
         <h3 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-200">Quick actions</h3>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { label: "Add a bus", href: "/operator/buses/new", Icon: PlusCircle, color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 dark:text-indigo-300" },
-            { label: "New schedule", href: "/operator/schedules/new", Icon: CalendarPlus, color: "text-violet-600 bg-violet-50 dark:bg-violet-950/40 dark:text-violet-300" },
-            { label: "Sales & revenue", href: "/operator/sales", Icon: DollarSign, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40" },
-            { label: "All schedules", href: "/operator/schedules", Icon: LayoutList, color: "text-sky-600 bg-sky-50 dark:bg-sky-900/40" },
-            { label: "Manifests", href: "/operator/schedules", Icon: FileText, color: "text-amber-600 bg-amber-50 dark:bg-amber-900/40" },
-            { label: "Profile & KYC", href: "/operator/onboarding", Icon: UserCog, color: "text-slate-600 bg-slate-100 dark:bg-slate-800" },
-          ].map(({ label, href, Icon, color }) => (
+          {quickActions.map(({ label, href, Icon, color }) => (
             <Link
               key={href + label}
               href={href}

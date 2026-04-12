@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useOperatorSession } from "@/app/operator/operator-session";
 import { operatorApi, type OperatorManifestBooking, type Schedule } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,6 +150,7 @@ export default function OperatorScheduleBookingsPage() {
   const idRaw = params.id;
   const scheduleId = typeof idRaw === "string" ? Number(idRaw) : Array.isArray(idRaw) ? Number(idRaw[0]) : NaN;
   const { getValidToken } = useAuth();
+  const { canManageOperations } = useOperatorSession();
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -233,7 +235,7 @@ export default function OperatorScheduleBookingsPage() {
     <div className="mx-auto max-w-5xl space-y-6 pb-16">
 
       {/* Cancel modal */}
-      {cancelTarget && (
+      {cancelTarget && canManageOperations && (
         <OperatorCancelModal
           title={cancelTarget.type === "schedule" ? "Cancel entire schedule" : "Cancel booking"}
           body={
@@ -266,13 +268,13 @@ export default function OperatorScheduleBookingsPage() {
               {route ? `${route.origin} → ${route.destination}` : loading ? "Loading…" : "Trip"}
               {schedule ? ` · ${formatDt(schedule.departure_dt)}` : ""}
             </p>
-            {schedule ? (
+            {schedule && canManageOperations ? (
               <Link href={`/operator/schedules/${schedule.id}/edit`} className="mt-1.5 inline-block text-sm text-indigo-600 hover:underline">
                 Edit pricing & offers
               </Link>
             ) : null}
           </div>
-          {!loading && rows.filter((b) => b.status === "CONFIRMED").length > 0 && (
+          {canManageOperations && !loading && rows.filter((b) => b.status === "CONFIRMED").length > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -438,7 +440,7 @@ export default function OperatorScheduleBookingsPage() {
                       <span className="font-semibold text-slate-800 dark:text-slate-100 text-sm">₹{b.amount}</span>
                       <span className="text-xs text-slate-400">{formatDt(b.created_at)}</span>
                       <div className="ml-auto">
-                        {b.status === "CONFIRMED" && (
+                        {canManageOperations && b.status === "CONFIRMED" && (
                           <button
                             className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             onClick={() => { setCancelMsg(null); setCancelTarget({ type: "booking", bookingId: b.id }); }}

@@ -21,7 +21,7 @@ from common.models import Route, RoutePattern, RoutePatternStop
 from common.serializers import RoutePatternSerializer
 
 from .booking_manifest import build_csv_response, build_pdf_response
-from .permissions import IsOperator
+from .permissions import IsOperator, IsOperatorOpsLead, IsOperatorOrgOwner
 from .serializers import (
     OperatorBookingManifestSerializer,
     OperatorBusSerializer,
@@ -42,6 +42,12 @@ class BusListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsOperator]
     serializer_class = OperatorBusSerializer
 
+    def get_permissions(self):
+        perms = [IsAuthenticated(), IsOperator()]
+        if self.request.method == "POST":
+            perms.append(IsOperatorOpsLead())
+        return perms
+
     def get_queryset(self):
         op = get_operator(self.request)
         if not op:
@@ -58,6 +64,12 @@ class BusDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated, IsOperator]
     serializer_class = OperatorBusSerializer
 
+    def get_permissions(self):
+        perms = [IsAuthenticated(), IsOperator()]
+        if self.request.method in ("PUT", "PATCH"):
+            perms.append(IsOperatorOpsLead())
+        return perms
+
     def get_queryset(self):
         op = get_operator(self.request)
         if not op:
@@ -72,6 +84,12 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
     """
     permission_classes = [IsAuthenticated, IsOperator]
     serializer_class = OperatorScheduleSerializer
+
+    def get_permissions(self):
+        perms = [IsAuthenticated(), IsOperator()]
+        if self.request.method == "POST":
+            perms.append(IsOperatorOpsLead())
+        return perms
 
     def list(self, request, *args, **kwargs):
         export_fmt = (request.query_params.get("export") or "").strip().lower()
@@ -170,6 +188,12 @@ class OperatorProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated, IsOperator]
     serializer_class = OperatorProfileSerializer
 
+    def get_permissions(self):
+        perms = [IsAuthenticated(), IsOperator()]
+        if self.request.method in ("PUT", "PATCH"):
+            perms.append(IsOperatorOrgOwner())
+        return perms
+
     def get_object(self):
         op = get_operator(self.request)
         if not op:
@@ -186,6 +210,12 @@ class ScheduleDetailView(generics.RetrieveUpdateAPIView):
 
     permission_classes = [IsAuthenticated, IsOperator]
     serializer_class = OperatorScheduleSerializer
+
+    def get_permissions(self):
+        perms = [IsAuthenticated(), IsOperator()]
+        if self.request.method in ("PUT", "PATCH"):
+            perms.append(IsOperatorOpsLead())
+        return perms
 
     def retrieve(self, request, *args, **kwargs):
         export_fmt = (request.query_params.get("export") or "").strip().lower()
@@ -376,7 +406,7 @@ class OperatorSalesListView(generics.ListAPIView):
     Query: date_from, date_to (ISO date, filter on `confirmed_at`), active_only (1/true = exclude refunds/cancels).
     """
 
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsAuthenticated, IsOperator, IsOperatorOpsLead]
     serializer_class = OperatorSaleSerializer
 
     def get_queryset(self):
@@ -431,7 +461,7 @@ class OperatorCancelBookingView(APIView):
     Body (optional): { "reason": "...", "refund_pct": 100 }
     Operator can cancel any booking on their schedule with optional refund override.
     """
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsAuthenticated, IsOperator, IsOperatorOpsLead]
 
     def post(self, request, schedule_id, booking_id):
         operator = get_operator(request)
@@ -467,7 +497,7 @@ class OperatorCancelScheduleView(APIView):
     Body (optional): { "reason": "...", "refund_pct": 100 }
     Cancels all CONFIRMED bookings on a schedule (e.g. bus breakdown).
     """
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsAuthenticated, IsOperator, IsOperatorOpsLead]
 
     def post(self, request, schedule_id):
         operator = get_operator(request)
@@ -520,7 +550,7 @@ class OperatorDuplicateScheduleView(APIView):
     Clones a schedule to a new date, keeping same bus/route/fare/points.
     Arrival date is shifted by the same offset as departure.
     """
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsAuthenticated, IsOperator, IsOperatorOpsLead]
 
     def post(self, request, pk):
         from django.shortcuts import get_object_or_404
@@ -620,7 +650,7 @@ class OperatorBulkCreateSchedulesView(APIView):
     Creates one schedule per matching day in the range.
     Skips dates where a schedule with same bus+departure_dt already exists.
     """
-    permission_classes = [IsAuthenticated, IsOperator]
+    permission_classes = [IsAuthenticated, IsOperator, IsOperatorOpsLead]
 
     def post(self, request):
         from datetime import datetime, timedelta

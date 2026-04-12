@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { OperationsGate } from "@/app/operator/capability-gates";
 import {
   operatorApi,
   type OperatorOfferStyle,
@@ -324,9 +325,11 @@ export default function EditSchedulePricingPage() {
 
   if (loading || !schedule) {
     return (
-      <div className="mx-auto max-w-2xl py-12 text-center text-slate-500">
-        {error ? <p className="text-amber-800">{error}</p> : <p>Loading…</p>}
-      </div>
+      <OperationsGate>
+        <div className="mx-auto max-w-2xl py-12 text-center text-slate-500">
+          {error ? <p className="text-amber-800">{error}</p> : <p>Loading…</p>}
+        </div>
+      </OperationsGate>
     );
   }
 
@@ -335,6 +338,7 @@ export default function EditSchedulePricingPage() {
   const bookableSeatLabels = bookableLabelsFromSeatMap(seatMapForLabels);
 
   return (
+    <OperationsGate>
     <div className="mx-auto max-w-4xl space-y-6 pb-16">
       <div>
         <Link
@@ -633,5 +637,6 @@ export default function EditSchedulePricingPage() {
           : '"Go live" saves pricing and offers to this trip. Active trips update for passengers immediately; pending trips show new pricing after approval.'}
       </p>
     </div>
+    </OperationsGate>
   );
 }

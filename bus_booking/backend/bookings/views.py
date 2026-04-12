@@ -601,31 +601,34 @@ class TicketDownloadView(generics.RetrieveAPIView):
         if booking.status != "CONFIRMED":
             return Response({"detail": "Ticket not available for this booking."}, status=400)
 
-        if not booking.ticket_file:
-            from .ticket_generator import save_ticket_to_booking
-
-            try:
-                filename = save_ticket_to_booking(booking)
-                booking.ticket_file = filename
-                booking.save(update_fields=["ticket_file"])
-            except Exception as e:
-                return Response({"detail": f"Failed to generate ticket: {str(e)}"}, status=500)
-
+        # Always regenerate so My Trips / email never serve a stale PDF from an older generator.
         import os
-        from django.http import FileResponse
-        from django.conf import settings
 
-        filepath = os.path.join(settings.BASE_DIR, "tickets", booking.ticket_file)
+        from django.conf import settings
+        from django.http import FileResponse
+
+        from .ticket_generator import save_ticket_to_booking
+
+        try:
+            filename = save_ticket_to_booking(booking)
+        except Exception as e:
+            return Response({"detail": f"Failed to generate ticket: {str(e)}"}, status=500)
+
+        if booking.ticket_file != filename:
+            booking.ticket_file = filename
+            booking.save(update_fields=["ticket_file"])
+
+        filepath = os.path.join(settings.BASE_DIR, "tickets", filename)
         if not os.path.exists(filepath):
             return Response({"detail": "Ticket file not found"}, status=404)
 
-        response = FileResponse(
+        download_name = f"e-GO-ticket-EGO{booking.id:07d}.pdf"
+        return FileResponse(
             open(filepath, "rb"),
             content_type="application/pdf",
-            filename=booking.ticket_file,
+            as_attachment=True,
+            filename=download_name,
         )
-        response["Content-Disposition"] = f'attachment; filename="{booking.ticket_file}"'
-        return response
 
 
 class SubmitBusRatingView(APIView):

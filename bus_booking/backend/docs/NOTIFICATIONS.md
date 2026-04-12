@@ -3,7 +3,7 @@
 When a booking is confirmed (Razorpay webhook fires `payment.captured`), e-GO
 automatically sends the passenger:
 
-1. **Booking confirmation email** with trip details and a PDF ticket download link.
+1. **Booking confirmation email** — HTML summary (route, times, PNR, fare/GST snapshot), **PDF ticket & tax invoice attached** when generation succeeds, plus a **download link** as fallback.
 2. **WhatsApp message** (only if the passenger ticked "Send on WhatsApp" during checkout).
 
 Both are fire-and-forget — a failure never blocks the booking response.

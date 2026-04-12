@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { OperationsGate } from "@/app/operator/capability-gates";
 import {
   operatorApi,
   routes as routesApi,
@@ -153,13 +154,16 @@ export default function AddSchedulePage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <p className="text-slate-500">Loading…</p>
-      </div>
+      <OperationsGate>
+        <div className="flex justify-center py-12">
+          <p className="text-slate-500">Loading…</p>
+        </div>
+      </OperationsGate>
     );
   }
 
   return (
+    <OperationsGate>
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center gap-4">
         <Link
@@ -472,5 +476,6 @@ export default function AddSchedulePage() {
         </CardContent>
       </Card>
     </div>
+    </OperationsGate>
   );
 }

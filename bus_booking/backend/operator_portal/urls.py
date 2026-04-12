@@ -1,4 +1,13 @@
 from django.urls import path
+
+from .staff_api import (
+    OperatorStaffInviteAcceptView,
+    OperatorStaffInviteDestroyView,
+    OperatorStaffInvitePreviewView,
+    OperatorStaffInviteResendView,
+    OperatorStaffInvitesView,
+    OperatorStaffListView,
+)
 from .views import (
     BusListCreateView,
     BusDetailView,
@@ -23,6 +32,12 @@ urlpatterns = [
     # the remainder is "manifest/day/". Without this, Django returns 404.
     path("manifest/day/", OperatorBookingsExportView.as_view(), name="operator_manifest_day_included"),
     path("dashboard-stats/", OperatorDashboardStatsView.as_view(), name="operator_dashboard_stats"),
+    path("staff/", OperatorStaffListView.as_view(), name="operator_staff_list"),
+    path("staff/invites/preview/", OperatorStaffInvitePreviewView.as_view(), name="operator_staff_invite_preview"),
+    path("staff/invites/accept/", OperatorStaffInviteAcceptView.as_view(), name="operator_staff_invite_accept"),
+    path("staff/invites/<int:pk>/resend/", OperatorStaffInviteResendView.as_view(), name="operator_staff_invite_resend"),
+    path("staff/invites/<int:pk>/", OperatorStaffInviteDestroyView.as_view(), name="operator_staff_invite_destroy"),
+    path("staff/invites/", OperatorStaffInvitesView.as_view(), name="operator_staff_invites"),
     path("me/", OperatorProfileView.as_view(), name="operator_profile"),
     path("buses/", BusListCreateView.as_view(), name="operator_bus_list_create"),
     path("buses/<int:pk>/", BusDetailView.as_view(), name="operator_bus_detail"),

@@ -7,37 +7,111 @@ import { Button } from "@/components/ui/button";
 import { useEffect } from "react";
 import { Bus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { operatorStaffLabel } from "@/lib/operator-staff";
+import { OperatorSessionProvider, useOperatorSession } from "./operator-session";
 
-const NAV = [
-  { href: "/operator/dashboard", label: "Dashboard", match: (p: string) => p === "/operator/dashboard" },
-  { href: "/operator/buses", label: "Buses", match: (p: string) => p.startsWith("/operator/buses") },
-  { href: "/operator/schedules", label: "Schedules", match: (p: string) => p.startsWith("/operator/schedules") },
-  { href: "/operator/sales", label: "Sales", match: (p: string) => p.startsWith("/operator/sales") },
-  { href: "/operator/onboarding", label: "Profile", match: (p: string) => p.startsWith("/operator/onboarding") },
+type NavFilter = "all" | "operations" | "company";
+
+const NAV: readonly {
+  href: string;
+  label: string;
+  match: (p: string) => boolean;
+  filter: NavFilter;
+}[] = [
+  { href: "/operator/dashboard", label: "Dashboard", match: (p: string) => p === "/operator/dashboard", filter: "all" },
+  { href: "/operator/buses", label: "Buses", match: (p: string) => p.startsWith("/operator/buses"), filter: "all" },
+  { href: "/operator/schedules", label: "Schedules", match: (p: string) => p.startsWith("/operator/schedules"), filter: "all" },
+  { href: "/operator/sales", label: "Sales", match: (p: string) => p.startsWith("/operator/sales"), filter: "operations" },
+  { href: "/operator/team", label: "Team", match: (p: string) => p.startsWith("/operator/team"), filter: "company" },
+  { href: "/operator/onboarding", label: "Profile", match: (p: string) => p.startsWith("/operator/onboarding"), filter: "company" },
 ] as const;
 
-export default function OperatorLayout({
+function OperatorMainNav() {
+  const pathname = usePathname();
+  const { canManageOperations, canManageCompany } = useOperatorSession();
+  const items = NAV.filter((n) => {
+    if (n.filter === "operations") return canManageOperations;
+    if (n.filter === "company") return canManageCompany;
+    return true;
+  });
+
+  return (
+    <>
+      <nav className="hidden min-w-0 items-center gap-1 md:flex">
+        {items.map(({ href, label, match }) => {
+          const active = match(pathname);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "rounded-full px-3.5 py-1.5 text-sm font-medium transition-all",
+                active
+                  ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/25"
+                  : "text-slate-600 hover:bg-white/80 hover:text-indigo-700 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-indigo-300"
+              )}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+      <nav className="flex max-w-[55vw] items-center gap-0.5 overflow-x-auto pb-0.5 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {items.map(({ href, label, match }) => {
+          const active = match(pathname);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-all",
+                active ? "bg-indigo-600 text-white" : "text-slate-600 dark:text-slate-400"
+              )}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
+    </>
+  );
+}
+
+function OperatorLayoutInner({
   children,
 }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { token, logout, isLoading } = useAuth();
+  const { loading: sessionLoading, me } = useOperatorSession();
   const isLoginPage = pathname === "/operator/login";
   const isRegisterPage = pathname === "/operator/register";
-  const isAuthLite = isLoginPage || isRegisterPage;
+  const isJoinPage = pathname === "/operator/join";
+  const isAuthLite = isLoginPage || isRegisterPage || isJoinPage;
 
   useEffect(() => {
     if (isLoading) return;
-    if (!isLoginPage && !token) router.replace("/operator/login");
-  }, [token, isLoading, isLoginPage, router]);
+    if (!isLoginPage && !isJoinPage && !token) router.replace("/operator/login");
+  }, [token, isLoading, isLoginPage, isJoinPage, router]);
 
-  const showContent = isLoginPage || token;
+  const showContent = isLoginPage || isRegisterPage || isJoinPage || token;
 
   const handleLogout = () => {
     logout();
     router.push("/operator/login");
     router.refresh();
   };
+
+  const subRole = (me?.operator_staff_role || "").trim();
+  const showRoleBadge = Boolean(
+    token &&
+      !isLoginPage &&
+      !sessionLoading &&
+      me?.role === "OPERATOR" &&
+      me.operator_id != null &&
+      (subRole === "MANAGER" || subRole === "DISPATCHER")
+  );
+  const roleChipLabel = operatorStaffLabel(me);
 
   return (
     <div
@@ -88,44 +162,19 @@ export default function OperatorLayout({
           {token ? (
             !isLoginPage ? (
               <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
-                <nav className="hidden min-w-0 items-center gap-1 md:flex">
-                  {NAV.map(({ href, label, match }) => {
-                    const active = match(pathname);
-                    return (
-                      <Link
-                        key={href}
-                        href={href}
-                        className={cn(
-                          "rounded-full px-3.5 py-1.5 text-sm font-medium transition-all",
-                          active
-                            ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/25"
-                            : "text-slate-600 hover:bg-white/80 hover:text-indigo-700 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-indigo-300"
-                        )}
-                      >
-                        {label}
-                      </Link>
-                    );
-                  })}
-                </nav>
-                <nav className="flex max-w-[55vw] items-center gap-0.5 overflow-x-auto pb-0.5 md:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {NAV.map(({ href, label, match }) => {
-                    const active = match(pathname);
-                    return (
-                      <Link
-                        key={href}
-                        href={href}
-                        className={cn(
-                          "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold transition-all",
-                          active
-                            ? "bg-indigo-600 text-white"
-                            : "text-slate-600 dark:text-slate-400"
-                        )}
-                      >
-                        {label}
-                      </Link>
-                    );
-                  })}
-                </nav>
+                {showRoleBadge && roleChipLabel && (
+                  <span
+                    className="hidden max-w-[10rem] truncate rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 sm:inline-block"
+                    title={
+                      subRole === "DISPATCHER"
+                        ? "View trips and bookings. Owners or managers change fares and refunds."
+                        : "Manage trips and pricing. Company profile and invites: owner only."
+                    }
+                  >
+                    {roleChipLabel}
+                  </span>
+                )}
+                <OperatorMainNav />
                 <Button
                   variant="outline"
                   size="sm"
@@ -172,5 +221,13 @@ export default function OperatorLayout({
         {showContent ? children : <div className="flex justify-center py-16 text-sm text-slate-500">Loading…</div>}
       </main>
     </div>
+  );
+}
+
+export default function OperatorLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <OperatorSessionProvider>
+      <OperatorLayoutInner>{children}</OperatorLayoutInner>
+    </OperatorSessionProvider>
   );
 }

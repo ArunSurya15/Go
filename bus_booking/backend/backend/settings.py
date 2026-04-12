@@ -59,7 +59,8 @@ RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
 # The "from" address must be a verified domain in your Resend account.
 # During dev you can use onboarding@resend.dev (only sends to your own email).
 EMAIL_FROM = os.getenv('EMAIL_FROM', 'e-GO Tickets <noreply@resend.dev>')
-# Public URL of your app — used in email links (ticket download, booking page).
+# Public URL of your app — used in email links (tickets, bookings, operator join invites).
+# In production set this to your real site (e.g. https://book.example.com), not localhost.
 APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://localhost:3000')
 
 # ── WhatsApp notifications ───────────────────────────────────────────────────

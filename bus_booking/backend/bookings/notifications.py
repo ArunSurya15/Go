@@ -16,12 +16,15 @@ OPERATOR users. WhatsApp is sent without a separate opt-in (transactional servic
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 import logging
-import urllib.request
+import os
 import urllib.parse
-from typing import TYPE_CHECKING, Iterable, Set, Tuple
+import urllib.request
+from decimal import Decimal, ROUND_HALF_UP
+from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple, TypedDict
 
 from django.apps import apps
 from django.conf import settings
@@ -63,20 +66,96 @@ def _format_dt(dt) -> str:
         return str(dt)
 
 
+def _format_dt_long(dt) -> str:
+    """e.g. Friday, 10 October 2025 — for email hero line."""
+    if dt is None:
+        return "—"
+    try:
+        from zoneinfo import ZoneInfo
+
+        local = dt.astimezone(ZoneInfo("Asia/Kolkata")) if dt.tzinfo else dt
+        return local.strftime("%A, %d %B %Y")
+    except Exception:
+        return str(dt)
+
+
+def _duration_hm(sched) -> str:
+    try:
+        dep, arr = sched.departure_dt, sched.arrival_dt
+        if not dep or not arr:
+            return "—"
+        secs = (arr - dep).total_seconds()
+        if secs <= 0:
+            return "—"
+        h, m = int(secs // 3600), int((secs % 3600) // 60)
+        parts = []
+        if h:
+            parts.append(f"{h} hr{'s' if h != 1 else ''}")
+        if m or not h:
+            parts.append(f"{m} min")
+        return ", ".join(parts) if parts else "—"
+    except Exception:
+        return "—"
+
+
+def _gst_taxable_and_total(amount) -> tuple[str, str, str]:
+    """Assume 5% GST included in fare (typical bus aggregator display)."""
+    try:
+        amt = Decimal(str(amount))
+        taxable = (amt / Decimal("1.05")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        gst = (amt - taxable).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return str(taxable), str(gst), str(amt)
+    except Exception:
+        return str(amount), "0.00", str(amount)
+
+
 # ─── email via Resend ────────────────────────────────────────────────────────
 
-def _resend_send(to: str, subject: str, html: str) -> bool:
-    """Send one email via Resend REST API. Returns True on success."""
+class _ResendAttachment(TypedDict):
+    filename: str
+    content: str
+
+
+def _resend_send(
+    to: str,
+    subject: str,
+    html: str,
+    *,
+    attachments: Optional[List[Tuple[str, str]]] = None,
+) -> bool:
+    """
+    Send one email via Resend REST API. Returns True on success.
+
+    attachments: optional list of (filepath on disk, attachment filename).
+    """
     api_key = _get("RESEND_API_KEY")
     if not api_key:
         logger.debug("RESEND_API_KEY not set — skipping email to %s", to)
         return False
-    payload = json.dumps({
+    body: dict = {
         "from": _get("EMAIL_FROM", "e-GO Tickets <noreply@resend.dev>"),
         "to": [to],
         "subject": subject,
         "html": html,
-    }).encode()
+    }
+    if attachments:
+        att_payload: list[_ResendAttachment] = []
+        for filepath, filename in attachments:
+            try:
+                if not filepath or not os.path.isfile(filepath):
+                    continue
+                with open(filepath, "rb") as fp:
+                    att_payload.append(
+                        {
+                            "filename": filename,
+                            "content": base64.standard_b64encode(fp.read()).decode("ascii"),
+                        }
+                    )
+            except OSError as e:
+                logger.warning("Could not attach %s: %s", filepath, e)
+        if att_payload:
+            body["attachments"] = att_payload
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         "https://api.resend.com/emails",
         data=payload,
@@ -108,66 +187,104 @@ def _booking_confirmation_html(booking: "Booking") -> str:
         seats = []
     seats_str = ", ".join(seats) if seats else "—"
     pnr = f"EGO{booking.id:07d}"
+    inv = f"EGOINV{booking.id:07d}"
     ticket_url = _ticket_url(booking)
     booking_url = _booking_url(booking)
     dep = _format_dt(sched.departure_dt)
     arr = _format_dt(sched.arrival_dt)
+    dep_long = _format_dt_long(sched.departure_dt)
+    dur = _duration_hm(sched)
     bus_name = (sched.bus.service_name or sched.bus.registration_no) if sched.bus_id else "—"
-    bp = booking.boarding_point.location_name if booking.boarding_point_id else "—"
-    dp = booking.dropping_point.location_name if booking.dropping_point_id else "—"
+    bp = booking.boarding_point.location_name if booking.boarding_point_id else route.origin
+    dp = booking.dropping_point.location_name if booking.dropping_point_id else route.destination
+    passenger = (booking.user.get_full_name() or booking.user.username or "Passenger").strip()
+    bill_email = (getattr(booking, "contact_email", None) or booking.user.email or "").strip()
+    taxable, gst_amt, total_amt = _gst_taxable_and_total(booking.amount)
+    e = lambda x: html.escape(str(x) if x is not None else "", quote=True)
+    route_title = f"{route.origin} → {route.destination}"
 
     return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Booking Confirmed — {pnr}</title>
+<title>e-GO Ticket — {e(pnr)}</title>
 <style>
-  body{{font-family:Arial,sans-serif;background:#f6f7fb;margin:0;padding:0}}
-  .wrap{{max-width:580px;margin:32px auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)}}
-  .header{{background:#4f46e5;padding:28px 32px;color:#fff}}
-  .header h1{{margin:0;font-size:22px;letter-spacing:-.3px}}
-  .header p{{margin:6px 0 0;opacity:.85;font-size:14px}}
-  .body{{padding:28px 32px}}
-  .pnr{{display:inline-block;background:#eef2ff;color:#4f46e5;font-family:monospace;font-size:22px;font-weight:700;padding:10px 20px;border-radius:8px;letter-spacing:2px;margin-bottom:20px}}
-  table{{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px}}
-  td{{padding:8px 0;border-bottom:1px solid #f1f1f4;color:#374151}}
-  td:first-child{{color:#6b7280;width:140px;font-size:13px}}
-  .btn{{display:inline-block;background:#4f46e5;color:#ffffff !important;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;margin-top:4px;border:2px solid #4f46e5}}
-  .footer{{background:#f9fafb;padding:18px 32px;font-size:12px;color:#9ca3af;text-align:center;border-top:1px solid #f1f1f4}}
+  body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#eef2ff;margin:0;padding:24px 12px;color:#1e1b4b}}
+  .shell{{max-width:600px;margin:0 auto}}
+  .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(67,56,202,.12),0 1px 3px rgba(0,0,0,.06)}}
+  .summary{{padding:20px 22px 18px;border-bottom:1px solid #e0e7ff}}
+  .summary h2{{margin:0;font-size:18px;font-weight:700;color:#312e81;letter-spacing:-.02em}}
+  .summary .sub{{margin:6px 0 0;font-size:13px;color:#64748b}}
+  .grid3{{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}}
+  .grid3 td{{vertical-align:top;padding:10px 8px;width:33%;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}}
+  .grid3 .lbl{{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin-bottom:4px}}
+  .grid3 .val{{font-weight:600;color:#1e293b}}
+  .hero{{background:linear-gradient(135deg,#4338ca 0%,#6366f1 45%,#4f46e5 100%);color:#fff;padding:22px 22px 0;text-align:center}}
+  .hero h1{{margin:0;font-size:20px;font-weight:800;letter-spacing:-.02em}}
+  .hero .route{{margin:8px 0 0;font-size:14px;opacity:.95;font-weight:500}}
+  .hero-strip{{margin-top:16px;padding:10px 16px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    background:rgba(0,0,0,.18);border-radius:0 0 12px 12px}}
+  .body{{padding:22px 22px 26px}}
+  .body p{{margin:0 0 14px;font-size:14px;line-height:1.55;color:#334155}}
+  .details{{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin:16px 0}}
+  .details th{{background:#f1f5f9;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;padding:10px 14px}}
+  .details td{{padding:10px 14px;font-size:13px;border-top:1px solid #f1f5f9;color:#334155}}
+  .details td:first-child{{width:38%;color:#64748b;font-weight:500}}
+  .legal{{font-size:11px;line-height:1.5;color:#64748b;margin:18px 0;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0}}
+  .btn{{display:inline-block;background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff!important;text-decoration:none;padding:14px 28px;border-radius:10px;font-size:14px;font-weight:700;box-shadow:0 4px 14px rgba(79,70,229,.35)}}
+  .btn2{{display:inline-block;margin-top:10px;font-size:13px;color:#4f46e5!important}}
+  .footer{{padding:16px;text-align:center;font-size:11px;color:#94a3b8}}
 </style></head>
 <body>
-<div class="wrap">
-  <div class="header">
-    <h1>✅ Booking confirmed{f", {_passenger_name(booking)}!" if _passenger_name(booking) else "!"}</h1>
-    <p>Thank you for booking with e-GO.</p>
+<div class="shell">
+  <div class="card">
+    <div class="summary">
+      <h2>{e(route_title)}</h2>
+      <p class="sub">{e(dep_long)} · {e(dep)} — {e(arr)}</p>
+      <table class="grid3" role="presentation">
+        <tr>
+          <td><span class="lbl">Departure</span><span class="val">{e(dep)}</span></td>
+          <td><span class="lbl">Duration</span><span class="val">{e(dur)}</span></td>
+          <td><span class="lbl">Arrival</span><span class="val">{e(arr)}</span></td>
+        </tr>
+        <tr>
+          <td><span class="lbl">From</span><span class="val">{e(route.origin)}</span></td>
+          <td><span class="lbl">To</span><span class="val">{e(route.destination)}</span></td>
+          <td><span class="lbl">PNR</span><span class="val" style="font-family:ui-monospace,monospace">{e(pnr)}</span></td>
+        </tr>
+      </table>
+    </div>
+    <div class="hero">
+      <h1>e-GO ticket &amp; tax invoice</h1>
+      <p class="route">{e(route_title)}</p>
+      <p class="route" style="font-size:13px;margin-top:4px;opacity:.9">{e(dep_long)}</p>
+      <div class="hero-strip">Ticket #{e(booking.id)} &nbsp;·&nbsp; PNR {e(pnr)} &nbsp;·&nbsp; Invoice {e(inv)}</div>
+    </div>
+    <div class="body">
+      <p>Dear <strong>{e(passenger)}</strong>,<br/>Thank you for booking with e-GO. Your payment is confirmed. A copy of your <strong>ticket &amp; GST invoice</strong> is attached to this email (PDF). You can also download it anytime from the link below.</p>
+      <table class="details" role="presentation" width="100%">
+        <tr><th colspan="2">Ticket details</th></tr>
+        <tr><td>Travels / service</td><td><strong>{e(sched.bus.operator.name if sched.bus_id else '—')}</strong> — {e(bus_name)}</td></tr>
+        <tr><td>Seat(s)</td><td><strong>{e(seats_str)}</strong></td></tr>
+        <tr><td>Boarding</td><td>{e(bp)}</td></tr>
+        <tr><td>Dropping</td><td>{e(dp)}</td></tr>
+        <tr><td>Bill to</td><td>{e(passenger)} &lt;{e(bill_email)}&gt;</td></tr>
+        <tr><td>Taxable value (excl. GST)</td><td>₹{e(taxable)}</td></tr>
+        <tr><td>GST (5% included in fare)</td><td>₹{e(gst_amt)}</td></tr>
+        <tr><td><strong>Total paid</strong></td><td><strong>₹{e(total_amt)}</strong></td></tr>
+      </table>
+      <p class="legal">e-GO is a technology platform connecting passengers with bus operators. This tax invoice is issued for the bus transportation service (SAC 996411) arranged through the platform. For cancellation terms, see the link in your booking.</p>
+      <a class="btn" href="{e(ticket_url)}">Download ticket (PDF)</a><br/>
+      <a class="btn2" href="{e(booking_url)}">View booking on e-GO</a>
+    </div>
+    <div class="footer">e-GO · Book smarter, travel better · Automated message — do not reply to this email.</div>
   </div>
-  <div class="body">
-    <div class="pnr">{pnr}</div>
-    <table>
-      <tr><td>Route</td><td><strong>{route.origin} → {route.destination}</strong></td></tr>
-      <tr><td>Departure</td><td>{dep}</td></tr>
-      <tr><td>Arrival</td><td>{arr}</td></tr>
-      <tr><td>Bus</td><td>{bus_name}</td></tr>
-      <tr><td>Seat(s)</td><td>{seats_str}</td></tr>
-      <tr><td>Boarding point</td><td>{bp}</td></tr>
-      <tr><td>Drop point</td><td>{dp}</td></tr>
-      <tr><td>Amount paid</td><td><strong>₹{booking.amount}</strong></td></tr>
-    </table>
-    <p style="margin-bottom:16px;font-size:14px;color:#374151">
-      Download your ticket below and carry it on your trip (digital or printed).
-    </p>
-    <a class="btn" href="{ticket_url}" style="display:inline-block;background:#4f46e5;color:#ffffff !important;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;">Download Ticket (PDF)</a>
-    <p style="margin-top:16px;font-size:12px;color:#9ca3af">
-      You can also view your booking at <a href="{booking_url}" style="color:#4f46e5">{booking_url}</a>
-    </p>
-  </div>
-  <div class="footer">e-GO · Book smarter, travel better · This is an automated message, please do not reply.</div>
 </div>
 </body></html>"""
 
 
 def send_booking_confirmation_email(booking: "Booking") -> None:
-    """Send booking confirmation email with ticket link. Silent on failure."""
+    """Send booking confirmation + tax invoice email (HTML + PDF attachment when available)."""
     try:
         # Prefer the email the passenger entered at checkout; fall back to account email
         to = (getattr(booking, "contact_email", "") or booking.user.email or "").strip()
@@ -177,9 +294,15 @@ def send_booking_confirmation_email(booking: "Booking") -> None:
         sched = booking.schedule
         route = sched.route
         pnr = f"EGO{booking.id:07d}"
-        subject = f"Booking confirmed — {pnr} | {route.origin} → {route.destination}"
+        subject = f"e-GO Ticket & invoice — {pnr} | {route.origin} → {route.destination}"
         html = _booking_confirmation_html(booking)
-        ok = _resend_send(to, subject, html)
+        attachments: list[tuple[str, str]] | None = None
+        tf = (booking.ticket_file or "").strip()
+        if tf:
+            fp = os.path.join(settings.BASE_DIR, "tickets", tf)
+            if os.path.isfile(fp):
+                attachments = [(fp, f"e-GO-ticket-{pnr}.pdf")]
+        ok = _resend_send(to, subject, html, attachments=attachments)
         if ok:
             logger.info("Confirmation email sent to %s for booking %s", to, booking.id)
     except Exception as e:
@@ -327,6 +450,51 @@ def send_email_otp(to: str, otp: str, name: str = "") -> bool:
 </div>
 </body></html>"""
     return _resend_send(to, "Your e-GO verification code", html)
+
+
+# ─── Operator staff invites ─────────────────────────────────────────────────
+
+def send_operator_staff_invite_email(
+    to_email: str,
+    invite_url: str,
+    operator_name: str,
+    role_display: str,
+) -> bool:
+    """
+    Email a teammate their one-time join link. Uses Resend like other mail.
+    Returns True if sent; False if RESEND_API_KEY is unset or send failed.
+    """
+    e = lambda x: html.escape(str(x) if x is not None else "", quote=True)
+    org = (operator_name or "Your team").strip() or "Your team"
+    role_line = (role_display or "teammate").strip()
+    subject = f"You're invited to {org} on e-GO"
+    html_body = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Operator invite — e-GO</title>
+<style>
+  body{{font-family:Arial,sans-serif;background:#f6f7fb;margin:0;padding:0}}
+  .wrap{{max-width:520px;margin:32px auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)}}
+  .header{{background:#4f46e5;padding:24px 32px;color:#fff}}
+  .header h1{{margin:0;font-size:20px}}
+  .body{{padding:28px 32px;color:#374151;font-size:15px;line-height:1.5}}
+  .btn{{display:inline-block;margin:20px 0;padding:14px 28px;background:#4f46e5;color:#fff!important;text-decoration:none;border-radius:999px;font-weight:600;font-size:15px}}
+  .muted{{color:#6b7280;font-size:13px}}
+  .footer{{background:#f9fafb;padding:16px 32px;font-size:12px;color:#9ca3af;text-align:center;border-top:1px solid #f1f1f4}}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="header"><h1>Join your operator team</h1></div>
+  <div class="body">
+    <p><strong>{e(org)}</strong> invited you to e-GO as <strong>{e(role_line)}</strong>.</p>
+    <p class="muted">Open the link below to choose a password and access the operator portal. The link expires in seven days.</p>
+    <p style="text-align:center"><a class="btn" href="{e(invite_url)}">Accept invitation</a></p>
+    <p class="muted" style="word-break:break-all">If the button doesn&rsquo;t work, paste this URL into your browser:<br/>{e(invite_url)}</p>
+  </div>
+  <div class="footer">e-GO · If you didn&rsquo;t expect this, you can ignore this email.</div>
+</div>
+</body></html>"""
+    return _resend_send(to_email, subject, html_body)
 
 
 # ─── SMS ─────────────────────────────────────────────────────────────────────

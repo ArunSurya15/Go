@@ -15,5 +15,6 @@ drf-spectacular-sidecar==2026.4.1
 django-cors-headers==4.9.0
 python-dotenv==1.0.1
 reportlab==4.4.10
+svglib==1.5.1
 qrcode[pil]==7.4.2
 pillow==12.2.0

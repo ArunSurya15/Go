@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useOperatorSession } from "@/app/operator/operator-session";
 import { operatorApi, type OperatorBus } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Bus, Edit, PlusCircle, Users } from "lucide-react";
@@ -11,6 +12,7 @@ import { Bus, Edit, PlusCircle, Users } from "lucide-react";
 export default function OperatorBusesPage() {
   const router = useRouter();
   const { getValidToken } = useAuth();
+  const { canManageOperations } = useOperatorSession();
   const [buses, setBuses] = useState<OperatorBus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -42,12 +44,18 @@ export default function OperatorBusesPage() {
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">My buses</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Fleet list, seat counts, and quick edits.</p>
         </div>
-        <Button asChild className="rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md shadow-indigo-600/20 hover:from-indigo-700 hover:to-violet-700">
-          <Link href="/operator/buses/new">
-            <PlusCircle className="mr-1.5 h-4 w-4" />
-            Add bus
-          </Link>
-        </Button>
+        {canManageOperations ? (
+          <Button asChild className="rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md shadow-indigo-600/20 hover:from-indigo-700 hover:to-violet-700">
+            <Link href="/operator/buses/new">
+              <PlusCircle className="mr-1.5 h-4 w-4" />
+              Add bus
+            </Link>
+          </Button>
+        ) : (
+          <p className="max-w-xs text-right text-xs text-slate-500 dark:text-slate-400">
+            View-only staff — ask an owner to add or edit buses.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -70,9 +78,11 @@ export default function OperatorBusesPage() {
           <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
             Add your first vehicle to attach seat maps and run schedules.
           </p>
-          <Button asChild className="mt-6 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md">
-            <Link href="/operator/buses/new">Add your first bus</Link>
-          </Button>
+          {canManageOperations ? (
+            <Button asChild className="mt-6 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold shadow-md">
+              <Link href="/operator/buses/new">Add your first bus</Link>
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-3">
@@ -95,13 +105,17 @@ export default function OperatorBusesPage() {
                         <p className="text-sm text-slate-500">{(bus as { service_name?: string }).service_name}</p>
                       )}
                     </div>
-                    <Link
-                      href={`/operator/buses/${bus.id}/edit`}
-                      className="flex items-center gap-1.5 rounded-full border border-indigo-200/90 bg-indigo-50/50 px-3.5 py-1.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                      Edit
-                    </Link>
+                    {canManageOperations ? (
+                      <Link
+                        href={`/operator/buses/${bus.id}/edit`}
+                        className="flex items-center gap-1.5 rounded-full border border-indigo-200/90 bg-indigo-50/50 px-3.5 py-1.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                    ) : (
+                      <span className="text-xs font-medium text-slate-400 dark:text-slate-500">View only</span>
+                    )}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                     <span className="flex items-center gap-1">

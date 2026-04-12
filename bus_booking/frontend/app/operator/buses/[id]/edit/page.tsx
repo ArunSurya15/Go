@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { OperationsGate } from "@/app/operator/capability-gates";
 import { operatorApi, routes, type BusFeatureDef } from "@/lib/api";
 import { BUS_FEATURES_FALLBACK } from "@/lib/bus-features";
 import { cn } from "@/lib/utils";
@@ -91,10 +92,15 @@ export default function EditBusPage() {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-16"><p className="text-slate-500">Loading bus…</p></div>;
+    return (
+      <OperationsGate>
+        <div className="flex justify-center py-16"><p className="text-slate-500">Loading bus…</p></div>
+      </OperationsGate>
+    );
   }
 
   return (
+    <OperationsGate>
     <div className="mx-auto max-w-2xl space-y-6 pb-16">
       <div>
         <Link href="/operator/buses" className="text-sm text-slate-500 hover:text-indigo-600">
@@ -213,5 +219,6 @@ export default function EditBusPage() {
         </CardContent>
       </Card>
     </div>
+    </OperationsGate>
   );
 }

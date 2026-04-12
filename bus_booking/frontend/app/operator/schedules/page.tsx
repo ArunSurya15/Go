@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useOperatorSession } from "@/app/operator/operator-session";
 import { operatorApi, type Schedule } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,6 +100,7 @@ function DuplicateModal({
 export default function OperatorSchedulesPage() {
   const router = useRouter();
   const { getValidToken } = useAuth();
+  const { canManageOperations } = useOperatorSession();
   const [loading, setLoading] = useState(true);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -213,7 +215,7 @@ export default function OperatorSchedulesPage() {
       )}
 
       {/* Duplicate modal */}
-      {duplicateTarget && (
+      {duplicateTarget && canManageOperations && (
         <DuplicateModal
           schedule={duplicateTarget}
           onClose={() => setDuplicateTarget(null)}
@@ -230,16 +232,22 @@ export default function OperatorSchedulesPage() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Schedules &amp; pricing</h1>
           <p className="mt-1 text-slate-600 dark:text-slate-400">Filter trips by departure date. Duplicate, bulk-create, or archive schedules.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/operator/schedules/bulk-new">
-              <LayoutList className="h-4 w-4 mr-1.5" />Bulk create
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/operator/schedules/new">Add schedule</Link>
-          </Button>
-        </div>
+        {canManageOperations ? (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/operator/schedules/bulk-new">
+                <LayoutList className="h-4 w-4 mr-1.5" />Bulk create
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/operator/schedules/new">Add schedule</Link>
+            </Button>
+          </div>
+        ) : (
+          <p className="max-w-xs text-right text-xs text-slate-500 dark:text-slate-400">
+            View-only — owners add or duplicate trips.
+          </p>
+        )}
       </div>
 
       <Card>
@@ -312,9 +320,14 @@ export default function OperatorSchedulesPage() {
         <CardContent className="p-0">
           {!loading && schedules.length === 0 ? (
             <p className="px-6 pb-6 text-sm text-slate-500">
-              No schedules in this range.{" "}
-              <Link href="/operator/schedules/new" className="text-indigo-600 hover:underline">Create one</Link> or{" "}
-              <Link href="/operator/schedules/bulk-new" className="text-indigo-600 hover:underline">bulk-create</Link>.
+              No schedules in this range.
+              {canManageOperations ? (
+                <>
+                  {" "}
+                  <Link href="/operator/schedules/new" className="text-indigo-600 hover:underline">Create one</Link> or{" "}
+                  <Link href="/operator/schedules/bulk-new" className="text-indigo-600 hover:underline">bulk-create</Link>.
+                </>
+              ) : null}
             </p>
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -355,17 +368,21 @@ export default function OperatorSchedulesPage() {
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/operator/schedules/${s.id}/bookings`}>Bookings</Link>
                       </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/operator/schedules/${s.id}/edit`}>Edit</Link>
-                      </Button>
-                      <button
-                        type="button"
-                        title="Duplicate to another date"
-                        onClick={() => setDuplicateTarget(s)}
-                        className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:border-violet-300 hover:text-violet-700 hover:bg-violet-50 transition-colors"
-                      >
-                        <Copy className="h-3.5 w-3.5" />Duplicate
-                      </button>
+                      {canManageOperations ? (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/operator/schedules/${s.id}/edit`}>Edit</Link>
+                        </Button>
+                      ) : null}
+                      {canManageOperations ? (
+                        <button
+                          type="button"
+                          title="Duplicate to another date"
+                          onClick={() => setDuplicateTarget(s)}
+                          className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:border-violet-300 hover:text-violet-700 hover:bg-violet-50 transition-colors"
+                        >
+                          <Copy className="h-3.5 w-3.5" />Duplicate
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         title={isArchived ? "Restore schedule" : "Archive schedule"}

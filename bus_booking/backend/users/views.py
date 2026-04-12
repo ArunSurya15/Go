@@ -158,6 +158,7 @@ class MeView(generics.GenericAPIView):
             "emergency_contact_phone": getattr(u, "emergency_contact_phone", "") or "",
             "role": getattr(u, "role", "PASSENGER"),
             "operator_id": getattr(u, "operator_id", None),
+            "operator_staff_role": getattr(u, "operator_staff_role", "") or "",
             "date_joined": u.date_joined.strftime("%b %Y"),
         })
 

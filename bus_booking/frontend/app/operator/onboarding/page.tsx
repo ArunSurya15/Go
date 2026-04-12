@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { CompanyOwnerGate } from "@/app/operator/capability-gates";
 import { operatorApi, type OperatorProfile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -366,14 +367,17 @@ export default function OperatorOnboardingPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-24">
-        <div className="h-10 w-10 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin dark:border-indigo-900 dark:border-t-indigo-400" />
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading your profile…</p>
-      </div>
+      <CompanyOwnerGate>
+        <div className="flex flex-col items-center justify-center gap-3 py-24">
+          <div className="h-10 w-10 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin dark:border-indigo-900 dark:border-t-indigo-400" />
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Loading your profile…</p>
+        </div>
+      </CompanyOwnerGate>
     );
   }
 
   return (
+    <CompanyOwnerGate>
     <div className="mx-auto max-w-3xl pb-16">
       <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Onboarding</p>
       <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">Complete your profile</h1>
@@ -839,5 +843,6 @@ export default function OperatorOnboardingPage() {
         </Card>
       )}
     </div>
+    </CompanyOwnerGate>
   );
 }
