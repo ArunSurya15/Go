@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useId } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { booking, downloadBookingTicketPdf, type Booking, type CancelPreview } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { TicketBusIcon } from "@/components/icons/ticket-bus-icon";
 import { EgoTicketSheet } from "@/components/ticket/ego-ticket-sheet";
 import {
   Bus,
@@ -55,40 +56,6 @@ function isPast(iso: string) {
   return new Date(iso) < new Date();
 }
 
-/** Golden-ticket style mark (unique gradient id per instance for list pages). */
-function GoldenTicketGlyph({ className }: { className?: string }) {
-  const rid = useId().replace(/:/g, "");
-  const gid = `gtg-${rid}`;
-  return (
-    <svg className={className} viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-      <defs>
-        <linearGradient id={gid} x1="2" y1="3" x2="20" y2="19" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#fffbeb" />
-          <stop offset="0.35" stopColor="#fcd34d" />
-          <stop offset="0.7" stopColor="#f59e0b" />
-          <stop offset="1" stopColor="#b45309" />
-        </linearGradient>
-      </defs>
-      <path
-        fill={`url(#${gid})`}
-        stroke="#92400e"
-        strokeWidth="0.55"
-        strokeLinejoin="round"
-        d="M4.2 6.4h13.6c.75 0 1.35.6 1.35 1.35v2.15a1.55 1.55 0 010 3.1v2.15c0 .75-.6 1.35-1.35 1.35H4.2c-.75 0-1.35-.6-1.35-1.35v-2.15a1.55 1.55 0 010-3.1V7.75c0-.75.6-1.35 1.35-1.35z"
-      />
-      <path stroke="#78350f" strokeWidth="0.45" strokeDasharray="1.15 1.15" strokeLinecap="round" d="M11 6.85v8.3" opacity="0.55" />
-      <circle cx="11" cy="9.1" r="0.45" fill="#78350f" />
-      <circle cx="11" cy="11" r="0.45" fill="#78350f" />
-      <circle cx="11" cy="12.9" r="0.45" fill="#78350f" />
-      <path
-        fill="#fef3c7"
-        fillOpacity="0.85"
-        d="M7.2 9.2h1.9v3.6H7.2a.55.55 0 01-.55-.55V9.75c0-.3.25-.55.55-.55zm6.7 0h1.9c.3 0 .55.25.55.55v2.5a.55.55 0 01-.55.55h-1.9V9.2z"
-      />
-    </svg>
-  );
-}
-
 /** Two map pins linked by a winding route (journey / live track). */
 function TrackRouteGlyph({ className }: { className?: string }) {
   return (
@@ -126,35 +93,15 @@ function TrackRouteGlyph({ className }: { className?: string }) {
   );
 }
 
-const tripTicketBtnClass = cn(
-  "h-10 gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-amber-100/50 px-3 pl-2.5 text-sm font-semibold text-amber-950 shadow-sm shadow-amber-200/30",
-  "transition-all hover:-translate-y-px hover:border-amber-300/90 hover:from-amber-100 hover:via-white hover:to-amber-50 hover:shadow-md hover:shadow-amber-300/40",
-  "active:translate-y-0 active:shadow-sm",
-  "focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-2",
-  "dark:border-amber-700/55 dark:from-amber-950/50 dark:via-slate-900 dark:to-amber-950/30 dark:text-amber-50",
-  "dark:hover:border-amber-600 dark:hover:from-amber-900/60 dark:hover:shadow-amber-900/30 dark:focus-visible:ring-amber-500/40"
+/** Minimal trip actions — no gold/amber, no heavy gradients. */
+const tripActionBtn = cn(
+  "h-9 gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700",
+  "shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/40 focus-visible:ring-offset-2",
+  "dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-700/80"
 );
 
-const tripTrackBtnClass = cn(
-  "h-10 gap-2 rounded-xl border border-sky-200/90 bg-gradient-to-br from-sky-50 via-white to-indigo-50/60 px-3 pl-2.5 text-sm font-semibold text-sky-950 shadow-sm shadow-sky-200/25",
-  "transition-all hover:-translate-y-px hover:border-sky-300/90 hover:from-sky-100 hover:via-white hover:to-indigo-50/80 hover:shadow-md hover:shadow-sky-200/35",
-  "active:translate-y-0 active:shadow-sm",
-  "focus-visible:ring-2 focus-visible:ring-sky-400/45 focus-visible:ring-offset-2",
-  "dark:border-sky-800/80 dark:from-sky-950/45 dark:via-slate-900 dark:to-indigo-950/40 dark:text-sky-100",
-  "dark:hover:border-sky-600 dark:hover:from-sky-900/55 dark:hover:shadow-sky-950/40 dark:focus-visible:ring-sky-500/40"
-);
-
-const tripDownloadBtnClass = cn(
-  "h-10 gap-2 rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-slate-100/50 px-3 pl-2.5 text-sm font-semibold text-slate-800 shadow-sm",
-  "transition-all hover:-translate-y-px hover:border-slate-300 hover:from-slate-100 hover:via-white hover:to-slate-50 hover:shadow-md",
-  "active:translate-y-0 active:shadow-sm",
-  "focus-visible:ring-2 focus-visible:ring-slate-400/40 focus-visible:ring-offset-2",
-  "disabled:pointer-events-none disabled:opacity-60",
-  "dark:border-slate-600 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100",
-  "dark:hover:border-slate-500 dark:hover:bg-slate-800"
-);
-
-const tripActionIconWrap = "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-black/5 dark:ring-white/10";
+const tripActionIconClass = "h-4 w-4 text-slate-500 dark:text-slate-400";
 
 // ── cancel modal ──────────────────────────────────────────────────────────────
 
@@ -364,7 +311,7 @@ export default function MyBookingsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-            <Sparkles className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+            <Sparkles className="h-3.5 w-3.5 text-indigo-400" aria-hidden />
             Your bookings
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">My Trips</h1>
@@ -523,48 +470,27 @@ export default function MyBookingsPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className={tripTicketBtnClass}
+                        className={tripActionBtn}
                         onClick={() => setTicketSheet(b)}
                       >
-                        <span
-                          className={cn(
-                            tripActionIconWrap,
-                            "bg-gradient-to-br from-amber-100 to-amber-200/90 dark:from-amber-900/90 dark:to-amber-950"
-                          )}
-                        >
-                          <GoldenTicketGlyph className="h-[22px] w-[22px] drop-shadow-sm" />
-                        </span>
+                        <TicketBusIcon className="h-[18px] w-[18px]" />
                         Show ticket
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className={tripDownloadBtnClass}
+                        className={tripActionBtn}
                         disabled={downloadBusyId === b.id}
                         onClick={() => void handleDownloadPdf(b.id)}
                       >
-                        <span
-                          className={cn(
-                            tripActionIconWrap,
-                            "bg-gradient-to-br from-slate-100 to-slate-200/90 dark:from-slate-800 dark:to-slate-900"
-                          )}
-                        >
-                          <Download className="h-4 w-4 text-slate-700 dark:text-slate-200" aria-hidden />
-                        </span>
+                        <Download className={tripActionIconClass} aria-hidden />
                         PDF
                       </Button>
                       {!isPast(b.schedule.departure_dt) && (
-                        <Button variant="ghost" size="sm" asChild className={tripTrackBtnClass}>
+                        <Button variant="ghost" size="sm" asChild className={tripActionBtn}>
                           <Link href={`/track?schedule_id=${b.schedule.id}`} className="inline-flex items-center gap-2">
-                            <span
-                              className={cn(
-                                tripActionIconWrap,
-                                "bg-gradient-to-br from-sky-100 to-indigo-100 dark:from-sky-900/90 dark:to-indigo-950"
-                              )}
-                            >
-                              <TrackRouteGlyph className="h-[22px] w-[22px]" />
-                            </span>
+                            <TrackRouteGlyph className="h-[18px] w-[18px] text-slate-500 dark:text-slate-400" />
                             Track
                           </Link>
                         </Button>
