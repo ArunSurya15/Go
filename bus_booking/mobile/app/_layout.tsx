@@ -14,6 +14,7 @@ import { useColorScheme } from "react-native";
 import "react-native-reanimated";
 
 import { AuthProvider } from "@/lib/auth-context";
+import { SearchDraftProvider } from "@/lib/search-draft-context";
 import { egoDarkTheme, egoLightTheme } from "@/constants/navigation-theme";
 
 export { ErrorBoundary } from "expo-router";
@@ -53,18 +54,35 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={navTheme}>
       <AuthProvider>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="login"
-            options={{
-              title: "Sign in",
-              presentation: "modal",
-              headerShadowVisible: false,
-            }}
-          />
-          <Stack.Screen name="search" options={{ title: "Find buses", headerShadowVisible: false }} />
-        </Stack>
+        <SearchDraftProvider>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="login"
+              options={{
+                title: "Sign in",
+                presentation: "modal",
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen name="search" options={{ title: "Find buses", headerShadowVisible: false }} />
+            <Stack.Screen
+              name="location-picker"
+              options={{
+                title: "Search",
+                presentation: "modal",
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen name="schedule-results" options={{ title: "Trips", headerShadowVisible: false }} />
+            <Stack.Screen name="schedule/[id]" options={{ title: "Trip", headerShadowVisible: false }} />
+            <Stack.Screen name="select-seats" options={{ title: "Seats", headerShadowVisible: false }} />
+            <Stack.Screen name="board-drop" options={{ title: "Board & drop", headerShadowVisible: false }} />
+            <Stack.Screen name="passenger" options={{ title: "Passengers", headerShadowVisible: false }} />
+            <Stack.Screen name="payment" options={{ title: "Payment", headerShadowVisible: false }} />
+            <Stack.Screen name="booking/[id]" options={{ title: "Confirmed", headerShadowVisible: false }} />
+          </Stack>
+        </SearchDraftProvider>
       </AuthProvider>
     </ThemeProvider>
   );

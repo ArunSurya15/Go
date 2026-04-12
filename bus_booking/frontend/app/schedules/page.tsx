@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { Suspense, useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,22 +21,16 @@ import {
   ArrowLeft,
   Calendar,
   Search,
-  ArrowLeftRight,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BusRatingReviewsTrigger } from "@/components/bus-rating-reviews-trigger";
 import { ScheduleOfferRibbon } from "@/components/schedule-offer-ribbon";
-
-function buildSchedulesPath(routeId: string, date: string, from: string, to: string) {
-  const q = new URLSearchParams();
-  q.set("route_id", routeId);
-  q.set("date", date);
-  q.set("from", from);
-  q.set("to", to);
-  return `/schedules?${q.toString()}`;
-}
+import { InterchangeArrowsIcon } from "@/components/icons/interchange-arrows";
+import { CityAutocompleteInput } from "@/components/search/city-autocomplete-input";
+import { buildSchedulesSearchPath } from "@/lib/schedules-url";
 
 function formatJourneyDate(iso: string) {
   const d = new Date(iso + "T12:00:00");
@@ -239,8 +233,17 @@ function SchedulesTripHeader({
   const router = useRouter();
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [swapBusy, setSwapBusy] = useState(false);
-  const [swapError, setSwapError] = useState("");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [headerError, setHeaderError] = useState("");
+  const [draftFrom, setDraftFrom] = useState(from);
+  const [draftTo, setDraftTo] = useState(to);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDraftFrom(from);
+    setDraftTo(to);
+    setHeaderError("");
+  }, [from, to, routeId]);
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const tomorrowIso = useMemo(
@@ -260,26 +263,61 @@ function SchedulesTripHeader({
   }, [datePickerOpen]);
 
   const navigateDate = (next: string) => {
-    router.push(buildSchedulesPath(routeId, next, from, to));
+    router.push(buildSchedulesSearchPath({ routeId, date: next, from, to }));
     setDatePickerOpen(false);
   };
 
   const handleSwap = async () => {
-    if (!from.trim() || !to.trim()) return;
+    if (!draftFrom.trim() || !draftTo.trim()) return;
     setSwapBusy(true);
-    setSwapError("");
+    setHeaderError("");
     try {
-      const list = await routes.list(to.trim(), from.trim());
+      const list = await routes.list(draftTo.trim(), draftFrom.trim());
       if (!list.length) {
-        setSwapError("No route the other way for these cities.");
-        window.setTimeout(() => setSwapError(""), 4000);
+        setHeaderError("No route the other way for these cities.");
+        window.setTimeout(() => setHeaderError(""), 5000);
         return;
       }
       router.push(
-        buildSchedulesPath(String(list[0].id), date, to.trim(), from.trim())
+        buildSchedulesSearchPath({
+          routeId: list[0].id,
+          date,
+          from: draftTo.trim(),
+          to: draftFrom.trim(),
+        })
       );
     } finally {
       setSwapBusy(false);
+    }
+  };
+
+  const citiesMatchUrl =
+    draftFrom.trim() === from.trim() && draftTo.trim() === to.trim();
+
+  const handleSearchClick = async () => {
+    setHeaderError("");
+    const df = draftFrom.trim();
+    const dt = draftTo.trim();
+    if (!df || !dt) {
+      setHeaderError("Enter both origin and destination.");
+      return;
+    }
+    if (citiesMatchUrl) {
+      onSearch();
+      return;
+    }
+    setSearchBusy(true);
+    try {
+      const list = await routes.list(df, dt);
+      if (!list.length) {
+        setHeaderError("No routes match those cities.");
+        return;
+      }
+      router.push(buildSchedulesSearchPath({ routeId: list[0].id, date, from: df, to: dt }));
+    } catch (e) {
+      setHeaderError(e instanceof Error ? e.message : "Search failed.");
+    } finally {
+      setSearchBusy(false);
     }
   };
 
@@ -302,8 +340,8 @@ function SchedulesTripHeader({
               {to || "—"}
             </p>
             <p className="text-sm text-muted-foreground">{busLine}</p>
-            {swapError ? (
-              <p className="text-xs text-destructive mt-1">{swapError}</p>
+            {headerError ? (
+              <p className="text-xs text-destructive mt-1">{headerError}</p>
             ) : null}
           </div>
         </div>
@@ -315,11 +353,17 @@ function SchedulesTripHeader({
       <div className="relative flex flex-col overflow-visible rounded-2xl border border-zinc-200/90 bg-card shadow-md ring-1 ring-zinc-950/[0.04] dark:border-zinc-800 dark:ring-white/[0.06] lg:flex-row lg:items-stretch">
         {/* From | swap on divider | To */}
         <div className="relative flex min-w-0 flex-1 flex-col border-b lg:flex-[2] lg:flex-row lg:items-stretch lg:border-b-0">
-          <div className="flex flex-1 items-center gap-3 border-b px-4 py-3.5 lg:border-b-0 lg:border-r lg:pr-10">
-            <Bus className="h-5 w-5 shrink-0 text-foreground" aria-hidden />
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">From</p>
-              <p className="font-semibold text-foreground truncate">{from || "—"}</p>
+          <div className="flex flex-1 items-start gap-3 border-b px-4 py-3.5 lg:border-b-0 lg:border-r lg:pr-10">
+            <Bus className="h-5 w-5 shrink-0 text-foreground mt-2" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground mb-1">From</p>
+              <CityAutocompleteInput
+                id="sched-search-from"
+                field="origin"
+                placeholder="Origin city"
+                value={draftFrom}
+                onChange={setDraftFrom}
+              />
             </div>
           </div>
 
@@ -333,15 +377,22 @@ function SchedulesTripHeader({
               onClick={() => void handleSwap()}
               aria-label="Swap from and to"
             >
-              <ArrowLeftRight className="h-4 w-4" />
+              <InterchangeArrowsIcon className="h-4 w-4" />
             </Button>
           </div>
 
-          <div className="flex flex-1 items-center gap-3 border-b px-4 py-3.5 lg:border-b-0 lg:border-r lg:pl-10">
-            <Bus className="h-5 w-5 shrink-0 text-foreground" aria-hidden />
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">To</p>
-              <p className="font-semibold text-foreground truncate">{to || "—"}</p>
+          <div className="flex flex-1 items-start gap-3 border-b px-4 py-3.5 lg:border-b-0 lg:border-r lg:pl-10">
+            <Bus className="h-5 w-5 shrink-0 text-foreground mt-2" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground mb-1">To</p>
+              <CityAutocompleteInput
+                id="sched-search-to"
+                field="destination"
+                originNarrow={draftFrom}
+                placeholder="Destination city"
+                value={draftTo}
+                onChange={setDraftTo}
+              />
             </div>
           </div>
         </div>
@@ -415,10 +466,16 @@ function SchedulesTripHeader({
             type="button"
             size="icon"
             className="h-12 w-12 shrink-0 rounded-full"
-            onClick={onSearch}
-            aria-label="Search buses"
+            disabled={searchBusy || swapBusy}
+            onClick={() => void handleSearchClick()}
+            aria-label={citiesMatchUrl ? "Refresh bus list" : "Search with updated cities"}
+            title={citiesMatchUrl ? "Refresh list" : "Apply cities and search"}
           >
-            <Search className="h-5 w-5" />
+            {searchBusy ? (
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            ) : (
+              <Search className="h-5 w-5" />
+            )}
           </Button>
         </div>
       </div>
@@ -501,7 +558,25 @@ function AmenityChips({
   );
 }
 
-export default function SchedulesPage() {
+function SchedulesPageFallback() {
+  return (
+    <div className="w-full min-h-[calc(100vh-3.5rem)] bg-neutral-100 dark:bg-neutral-950">
+      <div className="container mx-auto max-w-6xl px-4 py-6 space-y-4">
+        <div className="h-24 animate-pulse rounded-2xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
+          <div className="h-64 animate-pulse rounded-xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((k) => (
+              <div key={k} className="h-36 animate-pulse rounded-xl bg-zinc-200/80 dark:bg-zinc-800/80" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SchedulesPageContent() {
   const searchParams = useSearchParams();
   const routeId = searchParams.get("route_id");
   const date = searchParams.get("date");
@@ -759,5 +834,13 @@ export default function SchedulesPage() {
       )}
       </div>
     </div>
+  );
+}
+
+export default function SchedulesPage() {
+  return (
+    <Suspense fallback={<SchedulesPageFallback />}>
+      <SchedulesPageContent />
+    </Suspense>
   );
 }

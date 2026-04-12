@@ -85,7 +85,19 @@ SECRET_KEY = "django-insecure-(p5qi#i+%vgc_f4*qwl6i91_jgy!6t#h(rullh!ezr!l!o%1j2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+
+# Comma-separated, e.g. ALLOWED_HOSTS=api.example.com,192.168.1.5
+#
+# DEBUG: always allow `*` as well (append if missing). Mobile uses your PC LAN IP as Host;
+# a machine-level ALLOWED_HOSTS env (e.g. only "localhost") would otherwise block the phone.
+# Production: set DEBUG=False — then only the explicit list below (or from env) is used.
+_env_allowed = os.getenv("ALLOWED_HOSTS", "").strip()
+ALLOWED_HOSTS = [h.strip() for h in _env_allowed.split(",") if h.strip()] if _env_allowed else []
+if DEBUG:
+    if "*" not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append("*")
+elif not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
 
 
 # Application definition

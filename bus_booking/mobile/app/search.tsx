@@ -1,71 +1,322 @@
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { LinearGradient } from "expo-linear-gradient";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { router } from "expo-router";
-import { StyleSheet, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TouchableWithoutFeedback,
+  View,
+  Keyboard,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DateStrip } from "@/components/search/DateStrip";
 import { AppText } from "@/components/ui/AppText";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette, radii } from "@/constants/theme";
+import { addDays, formatLocalYMD, formatYMDChip, parseYMD } from "@/lib/date";
+import { routesApi } from "@/lib/api";
+import { useSearchDraft } from "@/lib/search-draft-context";
 
 export default function SearchScreen() {
+  const insets = useSafeAreaInsets();
+  const today = formatLocalYMD(new Date());
+  const { from, to, setFrom, setTo, swap } = useSearchDraft();
+  const [dateYmd, setDateYmd] = useState(today);
+  const [busy, setBusy] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const dateValue = useMemo(() => parseYMD(dateYmd) ?? new Date(), [dateYmd]);
+  const minDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const onDatePicked = (event: { type?: string }, selected?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+    if (event.type === "dismissed") return;
+    if (selected) setDateYmd(formatLocalYMD(selected));
+  };
+
+  const openCalendar = () => {
+    Keyboard.dismiss();
+    setShowDatePicker(true);
+  };
+
+  const runSearch = async () => {
+    Keyboard.dismiss();
+    if (!from.trim() || !to.trim()) {
+      Alert.alert("Almost there", "Choose origin and destination.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const list = await routesApi.list(from.trim(), to.trim());
+      if (!list.length) {
+        Alert.alert("No route", "We could not match those cities. Try different spellings (e.g. Bengaluru).");
+        return;
+      }
+      const routeId = list[0].id;
+      router.push({
+        pathname: "/schedule-results",
+        params: {
+          routeId: String(routeId),
+          date: dateYmd,
+          from: from.trim(),
+          to: to.trim(),
+        },
+      });
+    } catch (e) {
+      Alert.alert("Search failed", e instanceof Error ? e.message : "Check your connection and API URL.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-      <View style={styles.root}>
-        <SurfaceCard>
-          <AppText variant="title" style={{ marginBottom: 8 }}>
-            Route search
-          </AppText>
-          <AppText variant="body" style={{ marginBottom: 20 }}>
-            This screen is a styled shell. Next step: wire to `/api/routes/` and schedules like the website home page.
-          </AppText>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <LinearGradient
+          colors={["#eef2ff", "#e0e7ff", "#f8fafc"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradient}
+        >
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollInner,
+              { paddingTop: 8, paddingBottom: insets.bottom + 16 },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <SurfaceCard style={styles.card}>
+              <AppText variant="title" style={styles.title}>
+                Bus tickets
+              </AppText>
 
-          <AppText variant="label" style={styles.label}>
-            From
-          </AppText>
-          <TextInput
-            editable={false}
-            placeholder="City or stop"
-            placeholderTextColor={palette.slate500}
-            style={styles.input}
-          />
+              <View style={styles.routeCluster}>
+                <AppText variant="label" style={styles.fieldLabel}>
+                  From
+                </AppText>
+                <Pressable
+                  onPress={() =>
+                    router.push({ pathname: "/location-picker", params: { role: "from" } })
+                  }
+                  style={({ pressed }) => [styles.cityRow, pressed && { backgroundColor: palette.indigo50 }]}
+                >
+                  <FontAwesome name="bus" size={16} color={palette.indigo600} style={{ marginRight: 10 }} />
+                  <View style={styles.cityTextWrap}>
+                    <AppText numberOfLines={2} style={[styles.cityText, !from && styles.placeholder]}>
+                      {from.trim() || "Enter origin city"}
+                    </AppText>
+                  </View>
+                  <FontAwesome name="chevron-right" size={12} color={palette.slate400} />
+                </Pressable>
 
-          <AppText variant="label" style={[styles.label, { marginTop: 14 }]}>
-            To
-          </AppText>
-          <TextInput
-            editable={false}
-            placeholder="City or stop"
-            placeholderTextColor={palette.slate500}
-            style={styles.input}
-          />
+                <View style={styles.hairline} />
 
-          <AppText variant="label" style={[styles.label, { marginTop: 14 }]}>
-            Date
-          </AppText>
-          <TextInput
-            editable={false}
-            placeholder="Pick travel date"
-            placeholderTextColor={palette.slate500}
-            style={styles.input}
-          />
+                <AppText variant="label" style={[styles.fieldLabel, { marginTop: 8 }]}>
+                  To
+                </AppText>
+                <Pressable
+                  onPress={() =>
+                    router.push({ pathname: "/location-picker", params: { role: "to" } })
+                  }
+                  style={({ pressed }) => [styles.cityRow, pressed && { backgroundColor: palette.indigo50 }]}
+                >
+                  <FontAwesome name="map-marker" size={16} color={palette.indigo600} style={{ marginRight: 10 }} />
+                  <View style={styles.cityTextWrap}>
+                    <AppText numberOfLines={2} style={[styles.cityText, !to && styles.placeholder]}>
+                      {to.trim() || "Enter destination city"}
+                    </AppText>
+                  </View>
+                  <FontAwesome name="chevron-right" size={12} color={palette.slate400} />
+                </Pressable>
 
-          <PrimaryButton title="Search buses" disabled style={{ marginTop: 22 }} />
-          <PrimaryButton title="Close" variant="outline" onPress={() => router.back()} style={{ marginTop: 12 }} />
-        </SurfaceCard>
-      </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Swap origin and destination"
+                  onPress={swap}
+                  style={({ pressed }) => [styles.swapFab, pressed && { opacity: 0.9 }]}
+                >
+                  <View style={styles.swapDoubleArrows} accessibilityElementsHidden>
+                    <FontAwesome name="long-arrow-right" size={11} color="#fff" />
+                    <FontAwesome name="long-arrow-left" size={11} color="#fff" style={{ marginTop: 1 }} />
+                  </View>
+                </Pressable>
+              </View>
+
+              <Pressable
+                onPress={openCalendar}
+                style={({ pressed }) => [styles.dateHeader, pressed && { opacity: 0.85 }]}
+              >
+                <FontAwesome name="calendar" size={15} color={palette.indigo600} style={{ marginRight: 8 }} />
+                <AppText variant="label" style={{ flex: 1, color: palette.slate700 }}>
+                  Date of journey
+                </AppText>
+                <AppText variant="caption" style={styles.dateChip}>
+                  {formatYMDChip(dateYmd)}
+                </AppText>
+                <FontAwesome name="chevron-down" size={11} color={palette.indigo500} style={{ marginLeft: 6 }} />
+              </Pressable>
+
+              <DateStrip
+                selectedYmd={dateYmd}
+                onSelectYmd={setDateYmd}
+                onOpenCalendar={openCalendar}
+                compact
+              />
+
+              <View style={styles.quickRow}>
+                <Pressable onPress={() => setDateYmd(today)} style={styles.quickChip}>
+                  <AppText variant="caption" style={styles.quickChipText}>
+                    Today
+                  </AppText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setDateYmd(formatLocalYMD(addDays(new Date(), 1)))}
+                  style={styles.quickChip}
+                >
+                  <AppText variant="caption" style={styles.quickChipText}>
+                    Tomorrow
+                  </AppText>
+                </Pressable>
+              </View>
+
+              {showDatePicker ? (
+                <DateTimePicker
+                  value={dateValue}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  minimumDate={minDate}
+                  onChange={onDatePicked}
+                  themeVariant="light"
+                />
+              ) : null}
+              {Platform.OS === "ios" && showDatePicker ? (
+                <PrimaryButton
+                  title="Done"
+                  variant="outline"
+                  onPress={() => setShowDatePicker(false)}
+                  style={{ marginTop: 8 }}
+                />
+              ) : null}
+
+              <PrimaryButton
+                title="Search buses"
+                variant="filled"
+                loading={busy}
+                onPress={() => void runSearch()}
+                style={{ marginTop: 16 }}
+              />
+              <PrimaryButton title="Close" variant="outline" onPress={() => router.back()} style={{ marginTop: 8 }} />
+            </SurfaceCard>
+          </ScrollView>
+        </LinearGradient>
+      </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.slate50, padding: 20, justifyContent: "flex-start", paddingTop: 16 },
-  label: { marginBottom: 6 },
-  input: {
+  flex: { flex: 1 },
+  gradient: { flex: 1 },
+  scrollInner: { paddingHorizontal: 14, flexGrow: 1 },
+  card: {
+    maxWidth: 480,
+    width: "100%",
+    alignSelf: "center",
+    borderRadius: radii.lg,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: palette.slate200,
-    borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: fonts.regular,
-    backgroundColor: palette.slate100,
-    color: palette.slate600,
+    borderColor: palette.indigo100,
   },
+  title: { marginBottom: 14, fontSize: 20, lineHeight: 26 },
+  routeCluster: {
+    position: "relative",
+    marginBottom: 4,
+  },
+  fieldLabel: { marginBottom: 5, color: palette.slate600, fontSize: 12 },
+  cityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 48,
+    paddingVertical: 8,
+    paddingRight: 44,
+    paddingLeft: 2,
+    borderRadius: radii.md,
+  },
+  cityTextWrap: { flex: 1, paddingRight: 6 },
+  cityText: { fontSize: 16, fontFamily: fonts.semibold, color: palette.slate900, lineHeight: 22 },
+  placeholder: { color: palette.slate400, fontFamily: fonts.regular },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: palette.slate200,
+    marginVertical: 2,
+    marginRight: 40,
+  },
+  swapDoubleArrows: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  swapFab: {
+    position: "absolute",
+    right: 2,
+    top: "50%",
+    marginTop: -20,
+    width: 36,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: palette.indigo600,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: palette.white,
+    elevation: 5,
+    shadowColor: palette.indigo900,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+  },
+  dateHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 2,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+  },
+  dateChip: {
+    color: palette.indigo700,
+    fontFamily: fonts.semibold,
+    backgroundColor: palette.indigo50,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.full,
+    overflow: "hidden",
+  },
+  quickRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  quickChip: {
+    backgroundColor: palette.indigo50,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: palette.indigo100,
+  },
+  quickChipText: { color: palette.indigo800, fontFamily: fonts.semibold, fontSize: 11 },
 });

@@ -1,0 +1,12 @@
+{
+  "name": "ego-monorepo",
+  "private": true,
+  "description": "Root scripts to start backend, web frontend, and Expo mobile from one place.",
+  "scripts": {
+    "run-backend": "cd bus_booking/backend && python manage.py runserver 0.0.0.0:8000",
+    "run-frontend": "cd bus_booking/frontend && npm run dev",
+    "run-mobile": "cd bus_booking/mobile && npm run start",
+    "run-mobile:android": "cd bus_booking/mobile && npx expo start --android",
+    "run-mobile:ios": "cd bus_booking/mobile && npx expo start --ios"
+  }
+}

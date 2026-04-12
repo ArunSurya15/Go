@@ -1,3 +1,4 @@
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {
   ActivityIndicator,
   Pressable,
@@ -14,7 +15,7 @@ import { fonts, palette, radii, shadows } from "@/constants/theme";
 type Props = Omit<PressableProps, "style" | "children"> & {
   title: string;
   loading?: boolean;
-  variant?: "filled" | "outline" | "ghostOnDark";
+  variant?: "filled" | "outline" | "ghostOnDark" | "cta";
   style?: StyleProp<ViewStyle>;
 };
 
@@ -28,6 +29,8 @@ export function PrimaryButton({
 }: Props) {
   const isOutline = variant === "outline";
   const isGhost = variant === "ghostOnDark";
+  const isCta = variant === "cta";
+  const spinColor = isOutline ? palette.indigo600 : palette.white;
   return (
     <Pressable
       accessibilityRole="button"
@@ -38,24 +41,31 @@ export function PrimaryButton({
         variant === "filled" && styles.filled,
         isOutline && styles.outline,
         isGhost && styles.ghost,
+        isCta && styles.cta,
         (disabled || loading) && styles.disabled,
         pressed && styles.pressed,
         StyleSheet.flatten(style),
       ]}
     >
-      <View style={styles.inner}>
+      <View style={[styles.inner, isCta && styles.innerCta]}>
         {loading ? (
-          <ActivityIndicator color={isOutline || isGhost ? palette.indigo600 : palette.white} />
+          <ActivityIndicator color={spinColor} />
         ) : (
-          <AppText
-            style={[
-              styles.label,
-              isOutline && styles.labelOutline,
-              isGhost && styles.labelGhost,
-            ]}
-          >
-            {title}
-          </AppText>
+          <>
+            {isCta ? (
+              <FontAwesome name="search" size={18} color="#fff" style={{ marginRight: 10 }} />
+            ) : null}
+            <AppText
+              style={[
+                styles.label,
+                isOutline && styles.labelOutline,
+                isGhost && styles.labelGhost,
+                isCta && styles.labelCta,
+              ]}
+            >
+              {title}
+            </AppText>
+          </>
         )}
       </View>
     </Pressable>
@@ -81,6 +91,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
   },
+  cta: {
+    backgroundColor: "#dc2626",
+    shadowColor: "#991b1b",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  innerCta: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  labelCta: { color: "#ffffff" },
   disabled: { opacity: 0.55 },
   pressed: { opacity: 0.92, transform: [{ scale: 0.985 }] },
   inner: {

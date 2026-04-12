@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CityAutocompleteInput } from "@/components/search/city-autocomplete-input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   TravelHeroAmbientScenery,
@@ -21,6 +21,9 @@ import { routes } from "@/lib/api";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { addDays } from "date-fns";
 import { formatLocalYMD } from "@/lib/date-ymd";
+import { InterchangeArrowsIcon } from "@/components/icons/interchange-arrows";
+import { loadRecentSearches, rememberRecentSearch, type RecentSearch } from "@/lib/recent-searches";
+import { buildSchedulesSearchPath } from "@/lib/schedules-url";
 
 const containerVariants = {
   hidden: {},
@@ -46,6 +49,11 @@ export default function HomePage() {
   const [date, setDate] = useState(todayIso);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [recents, setRecents] = useState<RecentSearch[]>([]);
+
+  useEffect(() => {
+    setRecents(loadRecentSearches());
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,18 +63,40 @@ export default function HomePage() {
       return;
     }
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutMs = 25_000;
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const list = await routes.list(from.trim(), to.trim());
+      const list = await routes.list(from.trim(), to.trim(), { signal: controller.signal });
       if (list.length === 0) {
-        setError("No routes found. Try different cities.");
-        setLoading(false);
+        setError("No routes found. Try different cities or pick a suggestion.");
         return;
       }
       const routeId = list[0].id;
-      router.push(`/schedules?route_id=${routeId}&date=${date}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      rememberRecentSearch({ from: from.trim(), to: to.trim(), date });
+      setRecents(loadRecentSearches());
+      router.push(
+        buildSchedulesSearchPath({
+          routeId,
+          date,
+          from: from.trim(),
+          to: to.trim(),
+        })
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Search failed.");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError(
+          "Request timed out or was cancelled. Start Django on port 8000 (e.g. run-backend). On a phone/Expo app, use your PC’s LAN IP in EXPO_PUBLIC_API_URL — localhost is only this device."
+        );
+      } else if (err instanceof TypeError) {
+        setError(
+          "Could not reach the API. For the Next.js site, ensure the backend is running and next.config rewrites can reach it (API_INTERNAL_URL / NEXT_PUBLIC_API_URL)."
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Search failed.");
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -124,18 +154,41 @@ export default function HomePage() {
           </motion.div>
 
           <motion.div variants={fadeUp} className="mx-auto max-w-2xl">
-          <Card className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-[0_8px_30px_-12px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900/80">
+          <Card className="overflow-visible rounded-2xl border border-zinc-200/80 bg-white shadow-[0_8px_30px_-12px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900/80">
             <CardContent className="p-5 md:p-6">
+              {recents.length > 0 ? (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <span className="w-full text-xs font-medium text-muted-foreground">Recent</span>
+                  {recents.map((r) => (
+                    <button
+                      key={`${r.from}|${r.to}|${r.date}`}
+                      type="button"
+                      className="inline-flex max-w-full items-center gap-1 rounded-full border border-zinc-200/90 bg-zinc-50 px-3 py-1 text-left text-xs text-foreground transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/80 dark:hover:bg-zinc-800"
+                      onClick={() => {
+                        setFrom(r.from);
+                        setTo(r.to);
+                        setDate(r.date);
+                      }}
+                    >
+                      <span className="truncate font-medium">{r.from}</span>
+                      <span className="shrink-0 text-muted-foreground">→</span>
+                      <span className="truncate font-medium">{r.to}</span>
+                      <span className="shrink-0 text-muted-foreground">·</span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">{r.date}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <form onSubmit={handleSearch} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:gap-2 items-end">
                   <div className="grid gap-1.5">
                     <Label htmlFor="from" className="text-muted-foreground text-sm">From</Label>
-                    <Input
+                    <CityAutocompleteInput
                       id="from"
-                      placeholder="e.g. Bangalore"
+                      field="origin"
+                      placeholder="e.g. Bengaluru"
                       value={from}
-                      onChange={(e) => setFrom(e.target.value)}
-                      className="h-11"
+                      onChange={setFrom}
                     />
                   </div>
                   <Button
@@ -146,18 +199,17 @@ export default function HomePage() {
                     onClick={swapCities}
                     aria-label="Swap cities"
                   >
-                    <svg className="h-4 w-4 rotate-90 md:rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                    </svg>
+                    <InterchangeArrowsIcon className="h-4 w-4 rotate-90 md:rotate-0" />
                   </Button>
                   <div className="grid gap-1.5">
                     <Label htmlFor="to" className="text-muted-foreground text-sm">To</Label>
-                    <Input
+                    <CityAutocompleteInput
                       id="to"
-                      placeholder="e.g. Pondicherry"
+                      field="destination"
+                      originNarrow={from}
+                      placeholder="e.g. Puducherry"
                       value={to}
-                      onChange={(e) => setTo(e.target.value)}
-                      className="h-11"
+                      onChange={setTo}
                     />
                   </div>
                 </div>

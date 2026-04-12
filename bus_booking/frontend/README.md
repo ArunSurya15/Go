@@ -13,11 +13,9 @@ Next.js + Tailwind CSS + shadcn/ui + Framer Motion frontend for the bus booking 
 
 2. **Environment**
 
-   Copy `.env.local.example` to `.env.local` and set your backend URL:
+   In dev, `/api/*` is **proxied** to Django by `next.config.mjs` (default `http://127.0.0.1:8000`). You usually **do not** need `.env` for local search to work if the backend is on that host/port.
 
-   ```
-   NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
-   ```
+   Optional: copy `.env.example` → `.env.local` and set `NEXT_PUBLIC_API_URL` or `API_INTERNAL_URL` if Django runs elsewhere.
 
 3. **Run backend**
 

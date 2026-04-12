@@ -125,6 +125,12 @@ export default function BookingsScreen() {
               <AppText variant="caption" style={{ marginTop: 6 }}>
                 {fmtWhen(item.schedule.departure_dt)}
               </AppText>
+              {item.schedule.bus ? (
+                <AppText variant="caption" style={{ marginTop: 4, color: palette.slate600 }}>
+                  {(item.schedule.bus.service_name && item.schedule.bus.service_name.trim()) ||
+                    item.schedule.bus.registration_no}
+                </AppText>
+              ) : null}
               <AppText variant="body" style={{ marginTop: 10 }}>
                 Seats: {item.seats.join(", ")} · ₹{item.amount}
               </AppText>
