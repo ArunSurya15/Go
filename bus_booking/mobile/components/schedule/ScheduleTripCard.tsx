@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/ui/AppText";
@@ -12,20 +11,26 @@ type Props = {
 };
 
 export function ScheduleTripCard({ schedule, onPress }: Props) {
-  const busLabel =
-    (schedule.bus.service_name && schedule.bus.service_name.trim()) || schedule.bus.registration_no;
-  const promo = schedule.operator_promo_title || schedule.platform_promo_title;
-  const hasStrike = schedule.fare_original && Number(schedule.fare_original) > Number(schedule.fare);
+  const busTypeLabel =
+    (schedule.bus.service_name && schedule.bus.service_name.trim()) ||
+    (schedule.bus.registration_no && schedule.bus.registration_no.trim()) ||
+    `Bus #${schedule.id}`;
+  const operatorName = (schedule.bus.operator_name || "").trim();
+  const primaryOperator = operatorName || busTypeLabel;
+  const secondaryType = operatorName ? busTypeLabel : schedule.bus.registration_no || "";
+  const promo = schedule.operator_promo_title || schedule.platform_promo_title || schedule.platform_promo_line || "";
+  const fareNow = Number(schedule.fare || 0);
+  const fareOrigNum = schedule.fare_original ? Number(schedule.fare_original) : NaN;
+  const displayFare = Number.isFinite(fareOrigNum) ? Math.min(fareNow, fareOrigNum) : fareNow;
+  const hasStrike = Number.isFinite(fareOrigNum) && fareOrigNum > displayFare;
+  const saveAmount = hasStrike ? Math.max(0, Math.round(fareOrigNum - displayFare)) : 0;
+  const rating = Number(schedule.bus.rating_avg || 0);
+  const ratingCount = Number(schedule.bus.rating_count || 0);
+  const ratingTone = rating >= 4 ? "good" : rating >= 3 ? "warn" : "bad";
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.press, pressed && { opacity: 0.96 }]}>
       <View style={styles.card}>
-        <LinearGradient
-          colors={[palette.indigo600, "#6366f1"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.accent}
-        />
         <View style={styles.body}>
           <View style={styles.timesRow}>
             <View>
@@ -51,13 +56,30 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
 
           <View style={styles.busRow}>
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <AppText variant="label" numberOfLines={2}>
-                {busLabel}
+              <AppText numberOfLines={1} style={styles.operatorName}>
+                {primaryOperator}
               </AppText>
-              {schedule.bus.rating_count && schedule.bus.rating_avg ? (
-                <AppText variant="caption" style={styles.rating}>
-                  ★ {Number(schedule.bus.rating_avg).toFixed(1)} · {schedule.bus.rating_count} reviews
-                </AppText>
+              <AppText numberOfLines={2} style={styles.busName}>
+                {secondaryType}
+              </AppText>
+              {ratingCount > 0 && rating > 0 ? (
+                <View style={styles.ratingRow}>
+                  <View
+                    style={[
+                      styles.ratingBadge,
+                      ratingTone === "good" && styles.ratingGood,
+                      ratingTone === "warn" && styles.ratingWarn,
+                      ratingTone === "bad" && styles.ratingBad,
+                    ]}
+                  >
+                    <AppText variant="caption" style={styles.ratingBadgeText}>
+                      ★ {rating.toFixed(1)}
+                    </AppText>
+                  </View>
+                  <AppText variant="caption" style={styles.ratingCountText}>
+                    {ratingCount} reviews
+                  </AppText>
+                </View>
               ) : null}
             </View>
             <View style={styles.fareCol}>
@@ -66,27 +88,33 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
                   {formatRupee(schedule.fare_original!)}
                 </AppText>
               ) : null}
-              <AppText style={styles.fare}>{formatRupee(schedule.fare)}</AppText>
+              <AppText style={styles.fare}>{formatRupee(String(displayFare))}</AppText>
               <AppText variant="caption" style={styles.perSeat}>
-                per seat
+                onwards
               </AppText>
             </View>
           </View>
 
-          {promo ? (
-            <View style={styles.ribbon}>
-              <AppText variant="caption" style={styles.ribbonText}>
-                {promo}
-              </AppText>
+          {(promo || hasStrike) ? (
+            <View style={styles.offerWrap}>
+              {promo ? (
+                <View style={styles.ribbon}>
+                  <AppText variant="caption" style={styles.ribbonText}>
+                    {promo}
+                  </AppText>
+                </View>
+              ) : null}
+              {hasStrike ? (
+                <View style={styles.lastMinuteChip}>
+                  <AppText variant="caption" style={styles.lastMinuteText}>
+                    Last minute deal{saveAmount > 0 ? ` · Save ${formatRupee(String(saveAmount))}` : ""}
+                  </AppText>
+                </View>
+              ) : null}
             </View>
           ) : null}
 
-          <View style={styles.statusRow}>
-            <View style={[styles.pill, schedule.status === "ACTIVE" ? styles.pillLive : styles.pillMuted]}>
-              <AppText variant="caption" style={styles.pillTxt}>
-                {schedule.status}
-              </AppText>
-            </View>
+          <View style={styles.footerRow}>
             <AppText variant="caption" style={styles.tapHint}>
               Details →
             </AppText>
@@ -100,16 +128,14 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
 const styles = StyleSheet.create({
   press: { marginBottom: 14 },
   card: {
-    flexDirection: "row",
     borderRadius: radii.lg,
     overflow: "hidden",
     backgroundColor: palette.white,
     ...shadows.card,
   },
-  accent: { width: 5 },
   body: { flex: 1, padding: 16 },
   timesRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  timeBig: { fontFamily: fonts.bold, fontSize: 20, color: palette.slate900 },
+  timeBig: { fontFamily: fonts.bold, fontSize: 16, color: palette.slate900 },
   subMuted: { marginTop: 4, color: palette.slate500, fontFamily: fonts.medium },
   midPill: {
     backgroundColor: palette.indigo50,
@@ -121,29 +147,41 @@ const styles = StyleSheet.create({
   midPillText: { color: palette.indigo700, fontFamily: fonts.semibold, fontSize: 11 },
   divider: { height: 1, backgroundColor: palette.slate100, marginVertical: 14 },
   busRow: { flexDirection: "row", alignItems: "flex-start" },
-  rating: { marginTop: 4, color: palette.slate500 },
+  operatorName: { color: palette.slate900, fontFamily: fonts.bold, fontSize: 18, lineHeight: 24, marginBottom: 2 },
+  busName: { fontFamily: fonts.medium, fontSize: 13, color: palette.slate600, lineHeight: 18 },
+  ratingRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  ratingBadge: { borderRadius: radii.full, paddingHorizontal: 8, paddingVertical: 3 },
+  ratingGood: { backgroundColor: "#16a34a" },
+  ratingWarn: { backgroundColor: "#f59e0b" },
+  ratingBad: { backgroundColor: "#dc2626" },
+  ratingBadgeText: { color: palette.white, fontFamily: fonts.semibold },
+  ratingCountText: { marginLeft: 8, color: palette.slate500 },
   fareCol: { alignItems: "flex-end" },
   strike: { textDecorationLine: "line-through", color: palette.slate400 },
-  fare: { fontFamily: fonts.bold, fontSize: 22, color: palette.indigo700 },
+  fare: { fontFamily: fonts.bold, fontSize: 18, color: palette.indigo700 },
   perSeat: { color: palette.slate500, marginTop: 2 },
+  offerWrap: { marginTop: 10, gap: 6 },
   ribbon: {
-    marginTop: 12,
     alignSelf: "flex-start",
-    backgroundColor: palette.indigo50,
+    backgroundColor: "#fef3c7",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radii.full,
   },
-  ribbonText: { color: palette.indigo800, fontFamily: fonts.semibold },
-  statusRow: {
+  ribbonText: { color: "#92400e", fontFamily: fonts.semibold },
+  lastMinuteChip: {
+    alignSelf: "flex-start",
+    backgroundColor: "#ede9fe",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.full,
+  },
+  lastMinuteText: { color: "#5b21b6", fontFamily: fonts.semibold },
+  footerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 14,
+    justifyContent: "flex-end",
+    marginTop: 12,
   },
-  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radii.full },
-  pillLive: { backgroundColor: "#d1fae5" },
-  pillMuted: { backgroundColor: palette.slate100 },
-  pillTxt: { color: palette.slate800, textTransform: "capitalize", fontFamily: fonts.semibold },
   tapHint: { color: palette.indigo600, fontFamily: fonts.medium },
 });

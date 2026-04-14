@@ -169,7 +169,7 @@ function TravelHeroBusVisual({
 /** Realistic 3D cloud with volume and depth */
 function RealisticCloud({ className, variant = 0 }: { className?: string; variant?: number }) {
   const clipId = useId().replace(/:/g, "");
-  
+
   // Different cloud shapes - more realistic cumulus formations
   const cloudPaths = [
     {
@@ -214,7 +214,7 @@ function RealisticCloud({ className, variant = 0 }: { className?: string; varian
         <clipPath id={clipId}>
           <path d={cloud.main} />
         </clipPath>
-        
+
         <radialGradient id={`${clipId}-volume`}>
           <stop offset="0%" stopColor="white" stopOpacity="1" />
           <stop offset="100%" stopColor="hsl(210 20% 92%)" stopOpacity="0.95" />
@@ -302,19 +302,19 @@ function DriftingCloud({
 /** Detailed sun with realistic rays */
 function DetailedSun({ reduceMotion, uid }: { reduceMotion: boolean; uid: string }) {
   const sid = `sun-${uid}`;
-  
+
   // Create more rays with varied lengths
   const rays = Array.from({ length: 16 }, (_, i) => {
     const angle = (i * 360) / 16;
     const rad = (angle * Math.PI) / 180;
     const innerRadius = 26;
     const outerRadius = i % 2 === 0 ? 40 : 36;
-    
+
     const x1 = 50 + Math.cos(rad) * innerRadius;
     const y1 = 50 + Math.sin(rad) * innerRadius;
     const x2 = 50 + Math.cos(rad) * outerRadius;
     const y2 = 50 + Math.sin(rad) * outerRadius;
-    
+
     return (
       <line
         key={i}
@@ -344,13 +344,13 @@ function DetailedSun({ reduceMotion, uid }: { reduceMotion: boolean; uid: string
             <stop offset="50%" stopColor="hsl(45 100% 60%)" />
             <stop offset="100%" stopColor="hsl(40 100% 52%)" />
           </radialGradient>
-          
+
           <linearGradient id={`${sid}-ray`} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="hsl(48 100% 62%)" />
             <stop offset="100%" stopColor="hsl(42 100% 55%)" />
           </linearGradient>
         </defs>
-        
+
         <motion.g
           style={{ transformOrigin: "50px 50px" }}
           animate={reduceMotion ? {} : { rotate: 360 }}
@@ -358,10 +358,10 @@ function DetailedSun({ reduceMotion, uid }: { reduceMotion: boolean; uid: string
         >
           {rays}
         </motion.g>
-        
+
         {/* Sun core */}
         <circle cx="50" cy="50" r="24" fill={`url(#${sid}-core)`} />
-        
+
         {/* Highlight */}
         <circle cx="45" cy="45" r="10" fill="hsl(55 100% 80%)" opacity="0.5" />
         <circle cx="43" cy="43" r="6" fill="hsl(60 100% 90%)" opacity="0.7" />
@@ -442,7 +442,7 @@ function RealisticTree({
       ))}
 
       {/* Canopy - multiple layers for depth */}
-      
+
       {/* Back layer */}
       <circle
         cx={x - 8 * scale}
@@ -1048,13 +1048,13 @@ export function TravelHeroCruiseBus({ className }: { className?: string }) {
               reduceMotion
                 ? { duration: 0.2 }
                 : {
-                    x: {
-                      duration: 12,
-                      repeat: Infinity,
-                      ease: "linear",
-                      repeatType: "loop",
-                    },
-                  }
+                  x: {
+                    duration: 12,
+                    repeat: Infinity,
+                    ease: "linear",
+                    repeatType: "loop",
+                  },
+                }
             }
           >
             <div className="translate-y-1.5 sm:translate-y-2">
