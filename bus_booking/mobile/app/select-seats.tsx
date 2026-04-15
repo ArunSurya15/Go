@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -172,7 +173,8 @@ export default function SelectSeatsScreen() {
   }
 
   const { rows, cols, labels } = seatMap.layout;
-  const cell = 44;
+  const seatTypes = seatMap.layout.types ?? [];
+  const cell = 54;
   const gap = 6;
 
   return (
@@ -190,6 +192,11 @@ export default function SelectSeatsScreen() {
       <AppText variant="body" style={{ color: palette.slate600, marginBottom: 16 }}>
         Tap seats to add or remove. {selected.length ? `${selected.length} selected` : "None selected"}
       </AppText>
+      <View style={styles.legendRow}>
+        <LegendChip label="Sleeper" tone="sleep" />
+        <LegendChip label="Semi-sleeper" tone="semi" />
+        <LegendChip label="Seater" tone="seat" />
+      </View>
 
       <SurfaceCard style={{ marginBottom: 16, paddingVertical: 12 }}>
         <View style={{ alignSelf: "center" }}>
@@ -198,6 +205,8 @@ export default function SelectSeatsScreen() {
               {Array.from({ length: cols }, (_, c) => {
                 const idx = r * cols + c;
                 const label = labels[idx] ?? "";
+                const seatType = resolveSeatType(seatTypes[idx]);
+                const seatMeta = seatTypeMeta(seatType);
                 const isOcc = Boolean(label && occupied.has(label));
                 const isSel = Boolean(label && selected.includes(label));
                 const empty = !label || !String(label).trim();
@@ -227,6 +236,21 @@ export default function SelectSeatsScreen() {
                     >
                       {label}
                     </AppText>
+                    <AppText
+                      numberOfLines={1}
+                      style={[
+                        styles.seatTypeTxt,
+                        isOcc && { color: palette.slate400 },
+                        isSel && { color: "#fff" },
+                      ]}
+                    >
+                      <FontAwesome
+                        name={seatMeta.icon}
+                        size={8}
+                        color={isSel ? "#fff" : isOcc ? palette.slate400 : seatMeta.color}
+                      />{" "}
+                      {seatMeta.short}
+                    </AppText>
                   </Pressable>
                 );
               })}
@@ -239,9 +263,22 @@ export default function SelectSeatsScreen() {
       </SurfaceCard>
 
       <View style={styles.summary}>
-        <AppText variant="label" style={{ color: palette.slate600 }}>
-          Total
-        </AppText>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <AppText variant="label" style={{ color: palette.slate600 }}>
+            Total
+          </AppText>
+          {selected.length ? (
+            <AppText numberOfLines={2} variant="caption" style={{ marginTop: 3, color: palette.slate500 }}>
+              {selected
+                .map((seatNo) => {
+                  const i = labels.indexOf(seatNo);
+                  const t = i >= 0 ? resolveSeatType(seatTypes[i]) : "Seat";
+                  return `${seatNo} (${seatTypeMeta(t).short})`;
+                })
+                .join(", ")}
+            </AppText>
+          ) : null}
+        </View>
         <AppText style={styles.totalAmt}>{formatRupee(amount.toFixed(2))}</AppText>
       </View>
 
@@ -281,7 +318,9 @@ const styles = StyleSheet.create({
     backgroundColor: palette.indigo600,
     borderColor: palette.indigo600,
   },
-  seatTxt: { fontFamily: fonts.semibold, fontSize: 11, color: palette.slate800 },
+  seatTxt: { fontFamily: fonts.semibold, fontSize: 12, lineHeight: 15, color: palette.slate800 },
+  seatTypeTxt: { fontFamily: fonts.medium, fontSize: 9, lineHeight: 11, color: palette.slate500, marginTop: 2 },
+  legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 8 },
   summary: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -292,3 +331,46 @@ const styles = StyleSheet.create({
   },
   totalAmt: { fontFamily: fonts.bold, fontSize: 22, color: palette.indigo700 },
 });
+
+function resolveSeatType(raw?: string): "Sleeper" | "Semi-sleeper" | "Seater" {
+  const v = (raw || "").trim().toLowerCase();
+  if (!v) return "Seater";
+  if (v.includes("semi")) return "Semi-sleeper";
+  if (v.includes("sleep")) return "Sleeper";
+  return "Seater";
+}
+
+function LegendChip({ label, tone }: { label: string; tone: "sleep" | "semi" | "seat" }) {
+  const bg =
+    tone === "sleep" ? "#e0e7ff" : tone === "semi" ? "#ede9fe" : "#ecfeff";
+  const fg =
+    tone === "sleep" ? "#3730a3" : tone === "semi" ? "#5b21b6" : "#155e75";
+  const icon = tone === "sleep" ? "bed" : tone === "semi" ? "moon-o" : "user";
+  return (
+    <View
+      style={{
+        backgroundColor: bg,
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        flexDirection: "row",
+        alignItems: "center",
+      }}
+    >
+      <FontAwesome name={icon} size={11} color={fg} style={{ marginRight: 6 }} />
+      <AppText variant="caption" style={{ color: fg, fontFamily: fonts.semibold }}>
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+function seatTypeMeta(type: string): {
+  short: string;
+  icon: React.ComponentProps<typeof FontAwesome>["name"];
+  color: string;
+} {
+  if (type === "Sleeper") return { short: "Sleep", icon: "bed", color: "#3730a3" };
+  if (type === "Semi-sleeper") return { short: "Semi", icon: "moon-o", color: "#5b21b6" };
+  return { short: "Seat", icon: "user", color: "#155e75" };
+}

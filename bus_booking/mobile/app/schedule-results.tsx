@@ -18,7 +18,7 @@ import { ScheduleTripCard } from "@/components/schedule/ScheduleTripCard";
 import { AppText } from "@/components/ui/AppText";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
-import { palette } from "@/constants/theme";
+import { fonts, palette } from "@/constants/theme";
 import { formatYMDChip } from "@/lib/date";
 import { paramOne } from "@/lib/router-params";
 import { routesApi } from "@/lib/api";
@@ -212,21 +212,40 @@ export default function ScheduleResultsScreen() {
         <AppText variant="label" style={styles.countText}>
           {filteredRows.length} buses
         </AppText>
-        {(dealsOnly ||
-          acOnly ||
-          nonAcOnly ||
-          sleeperOnly ||
-          semiSleeperOnly ||
-          singleSeatOnly ||
-          highRatedOnly ||
-          liveTrackingOnly ||
-          sortMode !== "relevance") ? (
-          <Pressable onPress={clearFilters} style={styles.clearBtn}>
-            <AppText variant="caption" style={styles.clearBtnText}>
-              Clear filters
-            </AppText>
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={clearFilters}
+          disabled={
+            !(
+              dealsOnly ||
+              acOnly ||
+              nonAcOnly ||
+              sleeperOnly ||
+              semiSleeperOnly ||
+              singleSeatOnly ||
+              highRatedOnly ||
+              liveTrackingOnly ||
+              sortMode !== "relevance"
+            )
+          }
+          style={[
+            styles.clearBtn,
+            !(
+              dealsOnly ||
+              acOnly ||
+              nonAcOnly ||
+              sleeperOnly ||
+              semiSleeperOnly ||
+              singleSeatOnly ||
+              highRatedOnly ||
+              liveTrackingOnly ||
+              sortMode !== "relevance"
+            ) && styles.clearBtnHidden,
+          ]}
+        >
+          <AppText variant="caption" style={styles.clearBtnText}>
+            Clear filters
+          </AppText>
+        </Pressable>
       </View>
       <ScrollView
         horizontal
@@ -234,19 +253,20 @@ export default function ScheduleResultsScreen() {
         contentContainerStyle={styles.chipRow}
       >
         <Chip
-          label={`Filter & Sort · ${sortLabel(sortMode)}`}
+          label="Filter & Sort"
           icon="sliders"
+          width={128}
           active={showFilterSheet}
           onPress={() => setShowFilterSheet(true)}
         />
-        <Chip label="Deals" icon="tags" active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
-        <Chip label="AC" icon="snowflake-o" active={acOnly} onPress={() => setAcOnly((v) => !v)} />
-        <Chip label="Non-AC" icon="sun-o" active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
-        <Chip label="Sleeper" icon="bed" active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
-        <Chip label="Semi-sleeper" icon="moon-o" active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
-        <Chip label="Single seats" icon="user" active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
-        <Chip label="Highly rated" icon="star" active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
-        <Chip label="Live tracking" icon="map-marker" active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
+        <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
+        <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
+        <Chip label="Non-AC" icon="sun-o" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
+        <Chip label="Sleeper" icon="bed" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
+        <Chip label="Semi-sleeper" icon="moon-o" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
+        <Chip label="Single seats" icon="user" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
+        <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
+        <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
       </ScrollView>
       {err ? (
         <SurfaceCard style={{ marginBottom: 12 }}>
@@ -260,6 +280,7 @@ export default function ScheduleResultsScreen() {
         data={filteredRows}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={filteredRows.length === 0 ? styles.centerList : styles.list}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.indigo600} />}
         ListEmptyComponent={
           !err ? (
@@ -292,29 +313,35 @@ export default function ScheduleResultsScreen() {
               <FontAwesome name="close" size={16} color={palette.slate700} />
             </Pressable>
           </View>
-          <AppText variant="label" style={styles.sectionTitle}>
-            Sort by
-          </AppText>
-          <View style={styles.optList}>
-            <OptionRow label="Relevance (default)" active={sortMode === "relevance"} onPress={() => setSortMode("relevance")} />
-            <OptionRow label="Price low to high" active={sortMode === "priceLowToHigh"} onPress={() => setSortMode("priceLowToHigh")} />
-            <OptionRow label="Best rated first" active={sortMode === "bestRated"} onPress={() => setSortMode("bestRated")} />
-            <OptionRow label="Early departure first" active={sortMode === "earlyDeparture"} onPress={() => setSortMode("earlyDeparture")} />
-            <OptionRow label="Late departure first" active={sortMode === "lateDeparture"} onPress={() => setSortMode("lateDeparture")} />
-          </View>
-          <AppText variant="label" style={styles.sectionTitle}>
-            Filters
-          </AppText>
-          <View style={styles.filterGrid}>
-            <Chip label="Deals" icon="tags" active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
-            <Chip label="AC" icon="snowflake-o" active={acOnly} onPress={() => setAcOnly((v) => !v)} />
-            <Chip label="Non-AC" icon="sun-o" active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
-            <Chip label="Sleeper" icon="bed" active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
-            <Chip label="Semi-sleeper" icon="moon-o" active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
-            <Chip label="Single seats" icon="user" active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
-            <Chip label="Highly rated" icon="star" active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
-            <Chip label="Live tracking" icon="map-marker" active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
-          </View>
+          <ScrollView
+            style={styles.sheetScroll}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.sheetScrollContent}
+          >
+            <AppText variant="label" style={styles.sectionTitle}>
+              Sort by
+            </AppText>
+            <View style={styles.optList}>
+              <OptionRow label="Relevance (default)" active={sortMode === "relevance"} onPress={() => setSortMode("relevance")} />
+              <OptionRow label="Price low to high" active={sortMode === "priceLowToHigh"} onPress={() => setSortMode("priceLowToHigh")} />
+              <OptionRow label="Best rated first" active={sortMode === "bestRated"} onPress={() => setSortMode("bestRated")} />
+              <OptionRow label="Early departure first" active={sortMode === "earlyDeparture"} onPress={() => setSortMode("earlyDeparture")} />
+              <OptionRow label="Late departure first" active={sortMode === "lateDeparture"} onPress={() => setSortMode("lateDeparture")} />
+            </View>
+            <AppText variant="label" style={styles.sectionTitle}>
+              Filters
+            </AppText>
+            <View style={styles.filterGrid}>
+              <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
+              <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
+              <Chip label="Non-AC" icon="sun-o" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
+              <Chip label="Sleeper" icon="bed" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
+              <Chip label="Semi-sleeper" icon="moon-o" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
+              <Chip label="Single seats" icon="user" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
+              <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
+              <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
+            </View>
+          </ScrollView>
           <View style={styles.sheetFooter}>
             <PrimaryButton title="Clear all" variant="outline" onPress={clearFilters} style={{ flex: 1, marginRight: 8 }} />
             <PrimaryButton title={`View ${filteredRows.length} buses`} onPress={() => setShowFilterSheet(false)} style={{ flex: 1.4 }} />
@@ -340,11 +367,14 @@ const styles = StyleSheet.create({
   },
   countText: { color: palette.slate700 },
   clearBtn: {
+    minWidth: 92,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: palette.slate100,
+    alignItems: "center",
   },
+  clearBtnHidden: { opacity: 0 },
   clearBtnText: { color: palette.slate700 },
   chipRow: {
     paddingVertical: 4,
@@ -358,8 +388,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
     paddingHorizontal: 14,
     paddingTop: 12,
-    maxHeight: "82%",
+    height: "82%",
   },
+  sheetScroll: { flex: 1 },
+  sheetScrollContent: { paddingBottom: 6 },
   sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
   sheetTitle: { fontSize: 20, lineHeight: 24 },
   closeBtn: {
@@ -373,30 +405,52 @@ const styles = StyleSheet.create({
   sectionTitle: { marginTop: 10, marginBottom: 8, color: palette.slate700 },
   optList: { gap: 8 },
   filterGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 2 },
-  sheetFooter: { flexDirection: "row", marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: palette.slate100 },
+  sheetFooter: {
+    flexDirection: "row",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: palette.slate100,
+    backgroundColor: palette.white,
+  },
 });
 
 function Chip({
   label,
   icon,
   active,
+  width = "auto",
   onPress,
 }: {
   label: string;
   icon?: React.ComponentProps<typeof FontAwesome>["name"];
   active?: boolean;
+  width?: number | "auto";
   onPress: () => void;
 }) {
+  const customIcon =
+    icon === "sun-o" ? (
+      <View style={chipStyles.nonAcIconWrap}>
+        <FontAwesome name="snowflake-o" size={12} color={active ? palette.white : palette.slate500} />
+        <View style={[chipStyles.nonAcSlash, active && chipStyles.nonAcSlashActive]} />
+      </View>
+    ) : icon === "moon-o" ? (
+      <View style={chipStyles.semiIconWrap}>
+        <FontAwesome name="bed" size={12} color={active ? palette.white : palette.slate500} />
+        <View style={[chipStyles.semiDot, active && chipStyles.semiDotActive]} />
+      </View>
+    ) : icon ? (
+      <FontAwesome
+        name={icon}
+        size={12}
+        color={active ? palette.white : palette.slate500}
+        style={{ marginRight: 6 }}
+      />
+    ) : null;
+
   return (
-    <Pressable onPress={onPress} style={[chipStyles.base, active && chipStyles.active]}>
-      {icon ? (
-        <FontAwesome
-          name={icon}
-          size={12}
-          color={active ? palette.indigo700 : palette.slate500}
-          style={{ marginRight: 6 }}
-        />
-      ) : null}
+    <Pressable onPress={onPress} style={[chipStyles.base, width !== "auto" && { width }, active && chipStyles.active]}>
+      {customIcon}
       <AppText numberOfLines={1} style={[chipStyles.text, active && chipStyles.textActive]}>
         {label}
       </AppText>
@@ -418,32 +472,24 @@ function OptionRow({ label, active, onPress }: { label: string; active: boolean;
   );
 }
 
-function sortLabel(mode: SortMode): string {
-  if (mode === "priceLowToHigh") return "Price";
-  if (mode === "bestRated") return "Best rated";
-  if (mode === "earlyDeparture") return "Early";
-  if (mode === "lateDeparture") return "Late";
-  return "Relevance";
-}
-
 const chipStyles = StyleSheet.create({
   base: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: palette.slate200,
     backgroundColor: palette.white,
-    minHeight: 36,
+    height: 38,
     marginRight: 8,
     marginBottom: 8,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },
   active: {
-    borderColor: palette.indigo200,
-    backgroundColor: palette.indigo50,
+    borderColor: palette.indigo600,
+    backgroundColor: palette.indigo600,
   },
   text: {
     fontSize: 12,
@@ -451,8 +497,30 @@ const chipStyles = StyleSheet.create({
     color: palette.slate700,
   },
   textActive: {
-    color: palette.indigo700,
+    color: palette.white,
+    fontFamily: fonts.semibold,
   },
+  nonAcIconWrap: { width: 13, height: 13, marginRight: 6, alignItems: "center", justifyContent: "center" },
+  nonAcSlash: {
+    position: "absolute",
+    width: 14,
+    height: 1.6,
+    backgroundColor: palette.slate500,
+    transform: [{ rotate: "-35deg" }],
+    borderRadius: 2,
+  },
+  nonAcSlashActive: { backgroundColor: palette.white },
+  semiIconWrap: { width: 14, height: 14, marginRight: 6, alignItems: "center", justifyContent: "center" },
+  semiDot: {
+    position: "absolute",
+    right: -1,
+    top: -1,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: palette.slate400,
+  },
+  semiDotActive: { backgroundColor: palette.white },
   optionRow: {
     minHeight: 42,
     borderRadius: 12,
