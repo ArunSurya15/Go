@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   ratingBad: { backgroundColor: "#dc2626" },
   ratingBadgeText: { color: palette.white, fontFamily: fonts.semibold },
   ratingCountText: { marginLeft: 8, color: palette.slate500 },
-  fareCol: { alignItems: "flex-end" },
+  fareCol: { alignItems: "flex-end", minWidth: 92, flexShrink: 0 },
   strike: { textDecorationLine: "line-through", color: palette.slate400 },
   fare: { fontFamily: fonts.bold, fontSize: 16, color: palette.indigo700 },
   perSeat: { color: palette.slate500, marginTop: 2 },

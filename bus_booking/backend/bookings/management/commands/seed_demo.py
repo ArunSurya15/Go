@@ -72,12 +72,14 @@ class Command(BaseCommand):
             demo_op_user.save(update_fields=['operator'])
 
         # Five bus types: full seater, mixed (seater + sleeper), full sleeper, large sleeper, semi-sleeper
+        # Layouts: seater 12 rows (2+2, single deck); semi 10 rows (single deck); sleeper 6 rows (single deck);
+        # mixed 12 rows with explicit upper berth. Capacities = bookable seats (excl. aisle cells).
         # Varied demo ratings: green (≥4), yellow (3–<4), red (<3) — see schedule card star badges
         buses_data = [
-            ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 40, 'Seater 2x2', 'Bharat Benz A/C Seater (2+2)', Decimal('4.65'), 320),
-            ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 30, 'Mixed (lower seater, upper sleeper)', 'Volvo Multi-Axle (2+1)', Decimal('3.35'), 180),
-            ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 30, 'Sleeper 1x2', 'Bharat Benz A/C Sleeper (2+1)', Decimal('4.20'), 504),
-            ('KA04SL3456', LAYOUT_SLEEPER_1X2_LARGE, 36, 'Sleeper (large)', 'Scania Sleeper (2+1)', Decimal('2.55'), 210),
+            ('KA01AB1234', LAYOUT_SEATER_2X2_AISLE, 48, 'Seater 2x2', 'Bharat Benz A/C Seater (2+2)', Decimal('4.65'), 320),
+            ('KA02ST5678', LAYOUT_MIXED_SEATER_SLEEPER_1X2, 36, 'Mixed (lower seater, upper sleeper)', 'Volvo Multi-Axle (2+1)', Decimal('3.35'), 180),
+            ('KA03SL9012', LAYOUT_SLEEPER_1X2_AISLE, 18, 'Sleeper 1x2', 'Bharat Benz A/C Sleeper (2+1)', Decimal('4.20'), 504),
+            ('KA04SL3456', LAYOUT_SLEEPER_1X2_LARGE, 18, 'Sleeper (large)', 'Scania Sleeper (2+1)', Decimal('2.55'), 210),
             ('KA05SS7890', LAYOUT_SEMI_SLEEPER_2X2_AISLE, 40, 'Semi-sleeper 2x2', 'Mercedes Semi-Sleeper (2+2)', Decimal('3.70'), 95),
         ]
         buses = []
@@ -180,7 +182,7 @@ class Command(BaseCommand):
             f"Seeded: Route {route}, Operator {op.name}, 5 buses, {created_count} schedules (next 30 days)"
         ))
         self.stdout.write(self.style.SUCCESS(
-            "Buses: KA01AB1234 (Seater) | KA02ST5678 (Mixed seater+sleeper) | KA03SL9012 (Sleeper) | "
-            "KA04SL3456 (Sleeper large) | KA05SS7890 (Semi-sleeper)"
+            "Buses: KA01AB1234 (Seater 12×2+2, single deck) | KA02ST5678 (Mixed 12 rows, upper berth) | "
+            "KA03SL9012 & KA04SL3456 (Sleeper 6 rows, single deck) | KA05SS7890 (Semi 10×2+2, single deck)"
         ))
         self.stdout.write(self.style.SUCCESS("Done."))

@@ -7,6 +7,7 @@ import json
 from common.models import Route, RoutePattern, RoutePatternStop
 from buses.models import Operator, Bus
 from bookings.models import Schedule, BoardingPoint, DroppingPoint
+from bookings.layout_presets import LAYOUT_SEATER_2X2_AISLE
 
 class Command(BaseCommand):
     help = "Add test buses and schedules for testing (full Feb & Mar 2026 + a live-tracking demo)"
@@ -79,44 +80,54 @@ class Command(BaseCommand):
                 ],
             )
 
-        # Create buses with different layouts
+        # Create buses with different layouts (KA01 matches seed_demo seater preset)
         buses_data = [
             {
                 'reg': 'KA01AB1234',
-                'capacity': 40,
-                'layout': {'rows': 10, 'cols': 4, 'layout_type': 'standard_2_2'},
-                'labels': [f"{r}{c}" for r in range(1, 11) for c in "ABCD"]
+                'capacity': 48,
+                'seat_map_json': json.dumps(LAYOUT_SEATER_2X2_AISLE),
             },
             {
                 'reg': 'KA02CD5678',
                 'capacity': 36,
                 'layout': {'rows': 9, 'cols': 4, 'layout_type': 'standard_2_2'},
-                'labels': [f"{r}{c}" for r in range(1, 10) for c in "ABCD"]
+                'labels': [f"{r}{c}" for r in range(1, 10) for c in "ABCD"],
             },
             {
                 'reg': 'KA03EF9012',
                 'capacity': 30,
                 'layout': {'rows': 10, 'cols': 3, 'layout_type': 'sleeper_1_1_1_lower'},
-                'labels': [f"{r}{c}" for r in range(1, 11) for c in "ABC"]
+                'labels': [f"{r}{c}" for r in range(1, 11) for c in "ABC"],
             },
             {
                 'reg': 'KA04GH3456',
                 'capacity': 27,
                 'layout': {'rows': 9, 'cols': 3, 'layout_type': 'standard_2_1'},
-                'labels': [f"{r}{c}" for r in range(1, 10) for c in "ABC"]
+                'labels': [f"{r}{c}" for r in range(1, 10) for c in "ABC"],
             },
         ]
         buses = {}
         for b_data in buses_data:
-            bus, _ = Bus.objects.get_or_create(
-                registration_no=b_data['reg'],
-                defaults={
-                    'operator': op,
-                    'capacity': b_data['capacity'],
-                    'seat_map_json': json.dumps({**b_data['layout'], 'labels': b_data['labels']})
-                }
-            )
-            buses[b_data['reg']] = bus
+            reg = b_data["reg"]
+            if "seat_map_json" in b_data:
+                bus, _ = Bus.objects.update_or_create(
+                    registration_no=reg,
+                    defaults={
+                        "operator": op,
+                        "capacity": b_data["capacity"],
+                        "seat_map_json": b_data["seat_map_json"],
+                    },
+                )
+            else:
+                bus, _ = Bus.objects.update_or_create(
+                    registration_no=reg,
+                    defaults={
+                        "operator": op,
+                        "capacity": b_data["capacity"],
+                        "seat_map_json": json.dumps({**b_data["layout"], "labels": b_data["labels"]}),
+                    },
+                )
+            buses[reg] = bus
 
         # Initialize counter
         created_count = 0

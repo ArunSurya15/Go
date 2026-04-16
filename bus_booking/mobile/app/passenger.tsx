@@ -14,16 +14,43 @@ import { routesApi } from "@/lib/api";
 import type { SeatMapResponse } from "@/lib/types";
 import { useAuth } from "@/lib/auth-context";
 
-const STATES = [
+const INDIA_STATES_UT = [
   "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
   "Karnataka",
   "Kerala",
-  "Tamil Nadu",
+  "Madhya Pradesh",
   "Maharashtra",
-  "Delhi",
-  "Puducherry",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
   "Telangana",
-  "Other",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman and Nicobar Islands",
+  "Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry",
 ];
 
 type PInfo = { name: string; age: string; gender: string };
@@ -44,6 +71,7 @@ export default function PassengerScreen() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [stateRes, setStateRes] = useState("");
+  const [stateQuery, setStateQuery] = useState("");
   const [whatsapp, setWhatsapp] = useState(true);
   const [passengers, setPassengers] = useState<Record<string, PInfo>>({});
   const [err, setErr] = useState("");
@@ -57,7 +85,15 @@ export default function PassengerScreen() {
       setFlow(f);
       if (f?.contact_phone) setPhone(f.contact_phone);
       if (f?.email) setEmail(f.email);
-      if (f?.state_of_residence) setStateRes(f.state_of_residence);
+      if (f?.state_of_residence) {
+        if (INDIA_STATES_UT.includes(f.state_of_residence)) {
+          setStateRes(f.state_of_residence);
+          setStateQuery(f.state_of_residence);
+        } else {
+          setStateRes(f.state_of_residence);
+          setStateQuery(f.state_of_residence);
+        }
+      }
       if (f?.whatsapp_opt_in !== undefined) setWhatsapp(f.whatsapp_opt_in);
       if (f?.seats?.length) {
         const p: Record<string, PInfo> = {};
@@ -93,6 +129,12 @@ export default function PassengerScreen() {
   }, [seatMap]);
 
   const seats = flow?.seats ?? [];
+  const resolvedState = stateRes.trim() || stateQuery.trim();
+  const stateSuggestions = useMemo(() => {
+    const q = stateQuery.trim().toLowerCase();
+    if (!q) return INDIA_STATES_UT.slice(0, 8);
+    return INDIA_STATES_UT.filter((s) => s.toLowerCase().includes(q)).slice(0, 8);
+  }, [stateQuery]);
 
   const setP = (seat: string, patch: Partial<PInfo>) => {
     setPassengers((prev) => ({
@@ -107,7 +149,7 @@ export default function PassengerScreen() {
       setErr("Phone is required.");
       return;
     }
-    if (!stateRes) {
+    if (!resolvedState) {
       setErr("Select state of residence.");
       return;
     }
@@ -131,7 +173,7 @@ export default function PassengerScreen() {
       await mergeBookingFlow({
         contact_phone: phone.trim(),
         email: email.trim(),
-        state_of_residence: stateRes,
+        state_of_residence: resolvedState,
         whatsapp_opt_in: whatsapp,
         passengers,
       });
@@ -209,18 +251,34 @@ export default function PassengerScreen() {
         <AppText variant="title" style={{ marginBottom: 8 }}>
           State of residence *
         </AppText>
-        <View style={styles.chipWrap}>
-          {STATES.map((s) => (
-            <Pressable
-              key={s}
-              onPress={() => setStateRes(s)}
-              style={[styles.chip, stateRes === s && styles.chipOn]}
-            >
-              <AppText variant="caption" style={stateRes === s ? styles.chipTxtOn : styles.chipTxt}>
-                {s}
-              </AppText>
-            </Pressable>
-          ))}
+        <TextInput
+          value={stateQuery}
+          onChangeText={(t) => {
+            setStateQuery(t);
+            if (!t.trim()) setStateRes("");
+          }}
+          placeholder="Start typing your state / UT"
+          placeholderTextColor={palette.slate400}
+          style={styles.inp}
+        />
+        <View style={styles.suggestionWrap}>
+          {stateSuggestions.map((s) => {
+            const active = stateRes === s;
+            return (
+              <Pressable
+                key={s}
+                onPress={() => {
+                  setStateRes(s);
+                  setStateQuery(s);
+                }}
+                style={[styles.suggestionItem, active && styles.suggestionItemOn]}
+              >
+                <AppText variant="caption" style={active ? styles.suggestionTxtOn : styles.suggestionTxt}>
+                  {s}
+                </AppText>
+              </Pressable>
+            );
+          })}
         </View>
       </SurfaceCard>
 
@@ -316,18 +374,23 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 16,
   },
-  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.full,
+  suggestionWrap: {
+    marginTop: 8,
     borderWidth: 1,
     borderColor: palette.slate200,
+    borderRadius: radii.md,
     backgroundColor: palette.white,
+    overflow: "hidden",
   },
-  chipOn: { borderColor: palette.indigo500, backgroundColor: palette.indigo50 },
-  chipTxt: { color: palette.slate700 },
-  chipTxtOn: { color: palette.indigo800, fontFamily: fonts.semibold },
+  suggestionItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.slate100,
+  },
+  suggestionItemOn: { backgroundColor: palette.indigo50 },
+  suggestionTxt: { color: palette.slate700 },
+  suggestionTxtOn: { color: palette.indigo800, fontFamily: fonts.semibold },
   gRow: { flexDirection: "row", gap: 8 },
   gBtn: {
     paddingHorizontal: 14,

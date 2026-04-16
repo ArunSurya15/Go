@@ -2,7 +2,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { LinearGradient } from "expo-linear-gradient";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -23,6 +23,7 @@ import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette, radii } from "@/constants/theme";
 import { addDays, formatLocalYMD, formatYMDChip, parseYMD } from "@/lib/date";
 import { routesApi } from "@/lib/api";
+import { addRecentTrip, getRecentTrips, type RecentTrip } from "@/lib/recent-trips";
 import { useSearchDraft } from "@/lib/search-draft-context";
 
 export default function SearchScreen() {
@@ -32,6 +33,7 @@ export default function SearchScreen() {
   const [dateYmd, setDateYmd] = useState(today);
   const [busy, setBusy] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [recentTrips, setRecentTrips] = useState<RecentTrip[]>([]);
 
   const dateValue = useMemo(() => parseYMD(dateYmd) ?? new Date(), [dateYmd]);
   const minDate = useMemo(() => {
@@ -53,6 +55,30 @@ export default function SearchScreen() {
     setShowDatePicker(true);
   };
 
+  useEffect(() => {
+    void getRecentTrips().then(setRecentTrips);
+  }, []);
+
+  const openResults = async (fromCity: string, toCity: string, date: string) => {
+    const list = await routesApi.list(fromCity.trim(), toCity.trim());
+    if (!list.length) {
+      Alert.alert("No route", "We could not match those cities. Try different spellings (e.g. Bengaluru).");
+      return;
+    }
+    const routeId = list[0].id;
+    await addRecentTrip({ from: fromCity.trim(), to: toCity.trim(), dateYmd: date });
+    setRecentTrips(await getRecentTrips());
+    router.push({
+      pathname: "/schedule-results",
+      params: {
+        routeId: String(routeId),
+        date,
+        from: fromCity.trim(),
+        to: toCity.trim(),
+      },
+    });
+  };
+
   const runSearch = async () => {
     Keyboard.dismiss();
     if (!from.trim() || !to.trim()) {
@@ -61,26 +87,21 @@ export default function SearchScreen() {
     }
     setBusy(true);
     try {
-      const list = await routesApi.list(from.trim(), to.trim());
-      if (!list.length) {
-        Alert.alert("No route", "We could not match those cities. Try different spellings (e.g. Bengaluru).");
-        return;
-      }
-      const routeId = list[0].id;
-      router.push({
-        pathname: "/schedule-results",
-        params: {
-          routeId: String(routeId),
-          date: dateYmd,
-          from: from.trim(),
-          to: to.trim(),
-        },
-      });
+      await openResults(from, to, dateYmd);
     } catch (e) {
       Alert.alert("Search failed", e instanceof Error ? e.message : "Check your connection and API URL.");
     } finally {
       setBusy(false);
     }
+  };
+
+  const useRecentTrip = (trip: RecentTrip) => {
+    Keyboard.dismiss();
+    setFrom(trip.from);
+    setTo(trip.to);
+    const d = parseYMD(trip.dateYmd);
+    const safeDate = d && d >= minDate ? trip.dateYmd : today;
+    setDateYmd(safeDate);
   };
 
   return (
@@ -196,6 +217,30 @@ export default function SearchScreen() {
                   </AppText>
                 </Pressable>
               </View>
+
+              {recentTrips.length ? (
+                <View style={{ marginTop: 10 }}>
+                  <AppText variant="label" style={styles.recentLabel}>
+                    Recent trips
+                  </AppText>
+                  <View style={styles.recentWrap}>
+                    {recentTrips.map((trip) => (
+                      <Pressable
+                        key={`${trip.from}-${trip.to}-${trip.dateYmd}`}
+                        onPress={() => useRecentTrip(trip)}
+                        style={styles.recentChip}
+                      >
+                        <AppText variant="caption" style={styles.recentMain}>
+                          {trip.from} → {trip.to}
+                        </AppText>
+                        <AppText variant="caption" style={styles.recentDate}>
+                          Tap to fill search
+                        </AppText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
 
               {showDatePicker ? (
                 <DateTimePicker
@@ -319,4 +364,16 @@ const styles = StyleSheet.create({
     borderColor: palette.indigo100,
   },
   quickChipText: { color: palette.indigo800, fontFamily: fonts.semibold, fontSize: 11 },
+  recentLabel: { color: palette.slate600, marginBottom: 8 },
+  recentWrap: { gap: 8 },
+  recentChip: {
+    borderWidth: 1,
+    borderColor: palette.slate200,
+    backgroundColor: palette.white,
+    borderRadius: radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  recentMain: { color: palette.slate800, fontFamily: fonts.semibold },
+  recentDate: { color: palette.slate500, marginTop: 2 },
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useId, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 type SeatLayoutProps = {
@@ -490,10 +490,34 @@ function OrientedSeatBerthGraphic({
   );
 }
 
+/** Upper grip + hand cutouts (mask): hands nudged toward hub for a tighter “on wheel” read */
+const STEERING_MASK_TOP = `
+  M 8.6 12.5
+  Q 16.0 4.0 23.4 12.5
+  Q 20.5 14.5 16.0 13.1
+  Q 11.5 14.5 8.6 12.5
+  Z
+`;
+const STEERING_MASK_HAND_L = `
+  M 8.5 17.6
+  Q 9.2 23.8 13.6 23.6
+  Q 12.8 20.0 10.9 17.8
+  Q 9.6 16.4 8.5 17.6
+  Z
+`;
+const STEERING_MASK_HAND_R = `
+  M 23.5 17.6
+  Q 22.8 23.8 18.4 23.6
+  Q 19.2 20.0 21.1 17.8
+  Q 22.4 16.4 23.5 17.6
+  Z
+`;
+
 /**
  * Steering Wheel Icon
  */
 function SteeringWheelIcon({ className }: { className?: string }) {
+  const maskId = `steeringMask-${useId().replace(/:/g, "")}`;
   return (
     <svg
       className={className}
@@ -502,42 +526,21 @@ function SteeringWheelIcon({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <mask id="steeringMask">
+        <mask id={maskId}>
           <rect width="32" height="32" fill="white" />
-          <circle cx="16" cy="18" r="2" fill="black" />
-          <path
-            fill="black"
-            d="
-              M 8.0 13.0
-              Q 16.0 3.5 24.0 13.0
-              Q 21.2 15.2 16.0 13
-              Q 10.8 15.2 8.0 13.0
-              Z
-            "
-          />
-          <path
-            fill="black"
-            d="
-              M 7.8 18.2
-              Q 8.6 24.8 14.2 24.6
-              Q 13.2 20.4 10.8 18.0
-              Q 9.2 16.4 7.8 18.2
-              Z
-            "
-          />
-          <path
-            fill="black"
-            d="
-              M 24.2 18.2
-              Q 23.4 24.8 17.8 24.6
-              Q 18.8 20.4 21.2 18.0
-              Q 22.8 16.4 24.2 18.2
-              Z
-            "
-          />
+          <circle cx="16" cy="17.5" r="1.9" fill="black" />
+          <path fill="black" d={STEERING_MASK_TOP} />
+          <path fill="black" d={STEERING_MASK_HAND_L} />
+          <path fill="black" d={STEERING_MASK_HAND_R} />
         </mask>
       </defs>
-      <circle cx="16" cy="16" r="11.7" fill="currentColor" mask="url(#steeringMask)" />
+      <circle cx="16" cy="16" r="11.7" fill="currentColor" mask={`url(#${maskId})`} />
+      {/* White rim at hand / grip cutouts so silhouette separates from wheel fill */}
+      <g fill="none" stroke="#ffffff" strokeWidth={1.05} strokeLinejoin="round" strokeLinecap="round" opacity={0.92}>
+        <path d={STEERING_MASK_TOP} />
+        <path d={STEERING_MASK_HAND_L} />
+        <path d={STEERING_MASK_HAND_R} />
+      </g>
     </svg>
   );
 }

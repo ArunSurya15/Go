@@ -31,6 +31,7 @@ export default function BoardDropScreen() {
   const [dropping, setDropping] = useState<DroppingPoint[]>([]);
   const [boardingId, setBoardingId] = useState<number | null>(null);
   const [droppingId, setDroppingId] = useState<number | null>(null);
+  const [tab, setTab] = useState<"boarding" | "dropping">("boarding");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
@@ -85,73 +86,91 @@ export default function BoardDropScreen() {
         <AppText style={{ color: palette.rose500, marginBottom: 12 }}>{err}</AppText>
       ) : null}
 
-      <SurfaceCard style={{ marginBottom: 14 }}>
-        <AppText variant="title" style={{ marginBottom: 4 }}>
-          Boarding
-        </AppText>
-        {loading ? <AppText variant="body">Loading…</AppText> : null}
-        {!loading && boarding.length === 0 ? (
-          <AppText variant="body" style={{ color: palette.slate600 }}>
-            No boarding points — continue.
+      <View style={styles.tabs}>
+        <Pressable style={[styles.tabBtn, tab === "boarding" && styles.tabBtnOn]} onPress={() => setTab("boarding")}>
+          <AppText variant="caption" style={tab === "boarding" ? styles.tabTxtOn : styles.tabTxt}>
+            Boarding
           </AppText>
-        ) : null}
-        {!loading &&
-          boarding.map((bp) => {
-            const sel = boardingId === bp.id;
-            return (
-              <Pressable
-                key={bp.id}
-                onPress={() => setBoardingId(bp.id)}
-                style={[styles.pointRow, sel && styles.pointRowSel]}
-              >
-                <AppText style={styles.time}>{formatPointTime(bp.time)}</AppText>
-                <View style={{ flex: 1 }}>
-                  <AppText style={styles.loc}>{bp.location_name}</AppText>
-                  {bp.landmark ? (
-                    <AppText variant="caption" style={{ color: palette.slate500 }}>
-                      {bp.landmark}
-                    </AppText>
-                  ) : null}
-                </View>
-                <View style={[styles.radio, sel && styles.radioSel]} />
-              </Pressable>
-            );
-          })}
-      </SurfaceCard>
+        </Pressable>
+        <Pressable style={[styles.tabBtn, tab === "dropping" && styles.tabBtnOn]} onPress={() => setTab("dropping")}>
+          <AppText variant="caption" style={tab === "dropping" ? styles.tabTxtOn : styles.tabTxt}>
+            Drop-off
+          </AppText>
+        </Pressable>
+      </View>
 
-      <SurfaceCard style={{ marginBottom: 20 }}>
-        <AppText variant="title" style={{ marginBottom: 4 }}>
-          Drop-off
-        </AppText>
-        {loading ? <AppText variant="body">Loading…</AppText> : null}
-        {!loading && dropping.length === 0 ? (
-          <AppText variant="body" style={{ color: palette.slate600 }}>
-            No drop points — continue.
+      {tab === "boarding" ? (
+        <SurfaceCard style={{ marginBottom: 20 }}>
+          <AppText variant="title" style={{ marginBottom: 4 }}>
+            Boarding
           </AppText>
-        ) : null}
-        {!loading &&
-          dropping.map((dp) => {
-            const sel = droppingId === dp.id;
-            return (
-              <Pressable
-                key={dp.id}
-                onPress={() => setDroppingId(dp.id)}
-                style={[styles.pointRow, sel && styles.pointRowSel]}
-              >
-                <AppText style={styles.time}>{formatPointTime(dp.time)}</AppText>
-                <View style={{ flex: 1 }}>
-                  <AppText style={styles.loc}>{dp.location_name}</AppText>
-                  {dp.description ? (
-                    <AppText variant="caption" style={{ color: palette.slate500 }}>
-                      {dp.description}
-                    </AppText>
-                  ) : null}
-                </View>
-                <View style={[styles.radio, sel && styles.radioSel]} />
-              </Pressable>
-            );
-          })}
-      </SurfaceCard>
+          {loading ? <AppText variant="body">Loading…</AppText> : null}
+          {!loading && boarding.length === 0 ? (
+            <AppText variant="body" style={{ color: palette.slate600 }}>
+              No boarding points — continue.
+            </AppText>
+          ) : null}
+          {!loading &&
+            boarding.map((bp) => {
+              const sel = boardingId === bp.id;
+              return (
+                <Pressable
+                  key={bp.id}
+                  onPress={() => {
+                    setBoardingId(bp.id);
+                    if (dropping.length > 0) setTab("dropping");
+                  }}
+                  style={[styles.pointRow, sel && styles.pointRowSel]}
+                >
+                  <AppText style={styles.time}>{formatPointTime(bp.time)}</AppText>
+                  <View style={{ flex: 1 }}>
+                    <AppText style={styles.loc}>{bp.location_name}</AppText>
+                    {bp.landmark ? (
+                      <AppText variant="caption" style={{ color: palette.slate500 }}>
+                        {bp.landmark}
+                      </AppText>
+                    ) : null}
+                  </View>
+                  <View style={[styles.radio, sel && styles.radioSel]} />
+                </Pressable>
+              );
+            })}
+        </SurfaceCard>
+      ) : (
+        <SurfaceCard style={{ marginBottom: 20 }}>
+          <AppText variant="title" style={{ marginBottom: 4 }}>
+            Drop-off
+          </AppText>
+          {loading ? <AppText variant="body">Loading…</AppText> : null}
+          {!loading && dropping.length === 0 ? (
+            <AppText variant="body" style={{ color: palette.slate600 }}>
+              No drop points — continue.
+            </AppText>
+          ) : null}
+          {!loading &&
+            dropping.map((dp) => {
+              const sel = droppingId === dp.id;
+              return (
+                <Pressable
+                  key={dp.id}
+                  onPress={() => setDroppingId(dp.id)}
+                  style={[styles.pointRow, sel && styles.pointRowSel]}
+                >
+                  <AppText style={styles.time}>{formatPointTime(dp.time)}</AppText>
+                  <View style={{ flex: 1 }}>
+                    <AppText style={styles.loc}>{dp.location_name}</AppText>
+                    {dp.description ? (
+                      <AppText variant="caption" style={{ color: palette.slate500 }}>
+                        {dp.description}
+                      </AppText>
+                    ) : null}
+                  </View>
+                  <View style={[styles.radio, sel && styles.radioSel]} />
+                </Pressable>
+              );
+            })}
+        </SurfaceCard>
+      )}
 
       <PrimaryButton title="Continue" disabled={!canContinue} onPress={() => void onContinue()} />
     </ScrollView>
@@ -162,6 +181,22 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.slate50 },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
   step: { color: palette.slate500, marginBottom: 12 },
+  tabs: {
+    flexDirection: "row",
+    backgroundColor: palette.slate100,
+    borderRadius: radii.md,
+    padding: 4,
+    marginBottom: 12,
+  },
+  tabBtn: {
+    flex: 1,
+    borderRadius: radii.sm,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  tabBtnOn: { backgroundColor: palette.white },
+  tabTxt: { color: palette.slate600 },
+  tabTxtOn: { color: palette.indigo700, fontFamily: fonts.semibold },
   pointRow: {
     flexDirection: "row",
     alignItems: "center",
