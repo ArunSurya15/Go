@@ -1,9 +1,10 @@
 import { useNavigation } from "@react-navigation/native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ScheduleTripCard } from "@/components/schedule/ScheduleTripCard";
 import { AppText } from "@/components/ui/AppText";
+import { AppProblemState } from "@/components/ui/AppProblemState";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette } from "@/constants/theme";
@@ -55,6 +57,23 @@ export default function ScheduleResultsScreen() {
   const [singleSeatOnly, setSingleSeatOnly] = useState(false);
   const [highRatedOnly, setHighRatedOnly] = useState(false);
   const [liveTrackingOnly, setLiveTrackingOnly] = useState(false);
+  const filterScrollX = useRef(new Animated.Value(0)).current;
+
+  const filterPillWidth = filterScrollX.interpolate({
+    inputRange: [0, 64],
+    outputRange: [76, 0],
+    extrapolate: "clamp",
+  });
+  const filterBtnWidth = filterScrollX.interpolate({
+    inputRange: [0, 64],
+    outputRange: [128, 38],
+    extrapolate: "clamp",
+  });
+  const filterLabelOpacity = filterScrollX.interpolate({
+    inputRange: [0, 18, 50],
+    outputRange: [1, 0.35, 0],
+    extrapolate: "clamp",
+  });
 
   const load = useCallback(async () => {
     if (!routeId || !date) {
@@ -247,33 +266,71 @@ export default function ScheduleResultsScreen() {
           </AppText>
         </Pressable>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
-      >
-        <Chip
-          label="Filter & Sort"
-          icon="sliders"
-          width={128}
-          active={showFilterSheet}
-          onPress={() => setShowFilterSheet(true)}
-        />
-        <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
-        <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
-        <Chip label="Non-AC" icon="sun-o" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
-        <Chip label="Sleeper" icon="bed" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
-        <Chip label="Semi-sleeper" icon="moon-o" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
-        <Chip label="Single seats" icon="user" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
-        <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
-        <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
-      </ScrollView>
+      <View style={styles.filterBarRow}>
+        <View style={styles.frozenFilterWrap}>
+          <Animated.View style={[styles.filterAdaptiveBtn, { width: filterBtnWidth }]}>
+            <Pressable
+              onPress={() => setShowFilterSheet(true)}
+              style={({ pressed }) => [
+                styles.filterAdaptivePress,
+                showFilterSheet && styles.filterAdaptivePressActive,
+                pressed && { opacity: 0.88 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Filter and sort"
+            >
+              <FontAwesome
+                name="sliders"
+                size={14}
+                color={showFilterSheet ? palette.white : palette.slate600}
+                style={styles.filterAdaptiveIcon}
+              />
+              <Animated.View
+                style={[
+                  styles.filterAdaptiveLabelWrap,
+                  { opacity: filterLabelOpacity, width: filterPillWidth },
+                ]}
+              >
+                <AppText numberOfLines={1} style={[styles.filterAdaptiveLabel, showFilterSheet && styles.filterAdaptiveLabelActive]}>
+                  Filter & Sort
+                </AppText>
+              </Animated.View>
+            </Pressable>
+          </Animated.View>
+        </View>
+        <View style={styles.chipScrollWrap}>
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipScroller}
+            style={styles.chipScrollView}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: filterScrollX } } }],
+              { useNativeDriver: false }
+            )}
+            scrollEventThrottle={16}
+          >
+            <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
+            <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
+            <Chip label="Non-AC" icon="sun-o" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
+            <Chip label="Sleeper" icon="bed" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
+            <Chip label="Semi-sleeper" icon="moon-o" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
+            <Chip label="Single seats" icon="user" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
+            <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
+            <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
+          </Animated.ScrollView>
+        </View>
+      </View>
       {err ? (
         <SurfaceCard style={{ marginBottom: 12 }}>
-          <AppText variant="body" style={{ color: palette.rose500, marginBottom: 12 }}>
-            {err}
-          </AppText>
-          <PrimaryButton title="Try again" onPress={() => void load()} />
+          <AppProblemState
+            eyebrow="Loading issue"
+            title="Oops,"
+            highlight="hit a bump!"
+            description={err || "Couldn't load buses right now. Please try again."}
+            primaryAction={{ label: "Try again", onPress: () => void load() }}
+            secondaryAction={{ label: "Go Home", onPress: () => router.replace("/(tabs)") }}
+          />
         </SurfaceCard>
       ) : null}
       <FlatList
@@ -376,11 +433,43 @@ const styles = StyleSheet.create({
   },
   clearBtnHidden: { opacity: 0 },
   clearBtnText: { color: palette.slate700 },
-  chipRow: {
+  filterBarRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     paddingVertical: 4,
-    paddingHorizontal: 2,
     marginBottom: 10,
   },
+  frozenFilterWrap: {
+    width: 128,
+    marginRight: 6,
+    alignItems: "flex-start",
+    zIndex: 10,
+    backgroundColor: palette.slate50,
+  },
+  filterAdaptiveBtn: {
+    height: 38,
+    overflow: "hidden",
+  },
+  filterAdaptivePress: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.slate200,
+    backgroundColor: palette.white,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  filterAdaptivePressActive: { borderColor: palette.indigo600, backgroundColor: palette.indigo600 },
+  filterAdaptiveIcon: { width: 14, textAlign: "center", marginRight: 6 },
+  filterAdaptiveLabelWrap: { flexShrink: 1, overflow: "hidden" },
+  filterAdaptiveLabel: { fontSize: 12, lineHeight: 16, color: palette.slate700 },
+  filterAdaptiveLabelActive: { color: palette.white, fontFamily: fonts.semibold },
+  chipScrollWrap: { flex: 1, position: "relative", marginLeft: -6 },
+  chipScrollView: { flex: 1 },
+  chipScroller: { paddingLeft: 6, paddingRight: 2 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.35)" },
   sheet: {
     backgroundColor: palette.white,

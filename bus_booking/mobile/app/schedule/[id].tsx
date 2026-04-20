@@ -2,13 +2,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BusRatingSheet } from "@/components/trip/BusRatingSheet";
 import { RouteStopTimeline } from "@/components/trip/RouteStopTimeline";
 import { RotatingTextBanner } from "@/components/trip/RotatingTextBanner";
 import { AppText } from "@/components/ui/AppText";
+import { AppProblemState } from "@/components/ui/AppProblemState";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette, radii } from "@/constants/theme";
@@ -46,6 +47,17 @@ function ratingColors(avg: number): { bg: string; text: string; border: string }
   return { bg: "#fee2e2", text: "#9f1239", border: "#fca5a5" };
 }
 
+function busGalleryImages(schedule: Schedule): { uri: string; label: string }[] {
+  const seeded = [
+    { uri: `https://picsum.photos/seed/bus-${schedule.bus.id || schedule.id}-exterior/900/560`, label: "Exterior" },
+    { uri: `https://picsum.photos/seed/bus-${schedule.bus.id || schedule.id}-seats/900/560`, label: "Seats" },
+    { uri: `https://picsum.photos/seed/bus-${schedule.bus.id || schedule.id}-onboard/900/560`, label: "Onboard" },
+  ];
+  const uploaded = (schedule.bus.photo_url || "").trim();
+  if (!uploaded) return seeded;
+  return [{ uri: uploaded, label: "Operator photo" }, ...seeded.slice(0, 2)];
+}
+
 // ─── screen ───────────────────────────────────────────────────────────────────
 
 export default function ScheduleDetailScreen() {
@@ -68,6 +80,7 @@ export default function ScheduleDetailScreen() {
   const [reviews, setReviews] = useState<BusReview[]>([]);
   const [ratingSheetOpen, setRatingSheetOpen] = useState(false);
   const [fareOpen, setFareOpen] = useState(false);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!rid || !d || !sid) { setSchedule(null); return; }
@@ -89,6 +102,11 @@ export default function ScheduleDetailScreen() {
       .catch(() => { if (alive) setReviews([]); });
     return () => { alive = false; };
   }, [schedule?.bus?.id]);
+
+  useEffect(() => {
+    if (!schedule?.id) return;
+    setFailedImages({});
+  }, [schedule?.id]);
 
   const tickerLines = useMemo(() => {
     if (!schedule) return [];
@@ -130,13 +148,14 @@ export default function ScheduleDetailScreen() {
   if (!schedule) {
     return (
       <View style={styles.center}>
-        <SurfaceCard>
-          <AppText variant="title" style={{ marginBottom: 8 }}>Trip not found</AppText>
-          <AppText variant="body" style={{ marginBottom: 16 }}>
-            This departure may have been removed. Go back and pick another bus.
-          </AppText>
-          <PrimaryButton title="Back to results" onPress={() => router.back()} />
-        </SurfaceCard>
+        <AppProblemState
+          eyebrow="Page not found"
+          title="Oops,"
+          highlight="wrong stop!"
+          description="We couldn't find this trip. It may have changed or is no longer available."
+          primaryAction={{ label: "Go Home", onPress: () => router.replace("/(tabs)") }}
+          secondaryAction={{ label: "Search buses", onPress: () => router.back() }}
+        />
       </View>
     );
   }
@@ -157,6 +176,7 @@ export default function ScheduleDetailScreen() {
   const patternStops = schedule.route_pattern?.stops ?? [];
   const patternName = (schedule.route_pattern?.name || "").trim();
   const hasRoute = patternStops.length >= 2;
+  const galleryImages = busGalleryImages(schedule);
 
   const depTime = formatTime(schedule.departure_dt);
   const arrTime = formatTime(schedule.arrival_dt);
@@ -266,18 +286,30 @@ export default function ScheduleDetailScreen() {
           <View style={styles.section}>
             <AppText variant="label" style={styles.sectionTitle}>Bus gallery</AppText>
             <AppText variant="caption" style={[styles.sectionMuted, { marginBottom: 10 }]}>
-              Photos are added by operators — preview placeholders until uploads go live.
+              Operator photos appear here. Showing preview samples for now.
             </AppText>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoStrip}>
-              {[
-                { icon: "bus-side" as const, label: "Exterior", tint: ["#3730a3", "#6366f1"] as const },
-                { icon: "seat-recline-extra" as const, label: "Seats", tint: ["#312e81", "#4f46e5"] as const },
-                { icon: "star-circle" as const, label: "Onboard", tint: ["#1e293b", "#475569"] as const },
-              ].map((slot) => (
-                <LinearGradient key={slot.label} colors={[...slot.tint]} style={styles.photoCard}>
-                  <MaterialCommunityIcons name={slot.icon} size={36} color="rgba(255,255,255,0.92)" />
-                  <AppText variant="caption" style={styles.photoCardLabel}>{slot.label}</AppText>
-                </LinearGradient>
+              {galleryImages.map((photo) => (
+                <View key={`${photo.label}-${photo.uri}`} style={styles.photoCard}>
+                  {failedImages[photo.uri] ? (
+                    <View style={styles.photoFallback}>
+                      <MaterialCommunityIcons name="image-off-outline" size={24} color="rgba(255,255,255,0.9)" />
+                      <AppText variant="caption" style={styles.photoFallbackText}>
+                        You should not be seeing this image
+                      </AppText>
+                    </View>
+                  ) : (
+                    <Image
+                      source={{ uri: photo.uri }}
+                      style={styles.photoImage}
+                      resizeMode="cover"
+                      onError={() => setFailedImages((prev) => ({ ...prev, [photo.uri]: true }))}
+                    />
+                  )}
+                  <View style={styles.photoCaption}>
+                    <AppText variant="caption" style={styles.photoCardLabel}>{photo.label}</AppText>
+                  </View>
+                </View>
               ))}
             </ScrollView>
           </View>
@@ -421,13 +453,34 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: radii.xl,
   },
   heroEyebrow: { color: "rgba(255,255,255,0.8)", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 },
-  heroTime: { fontFamily: fonts.bold, fontSize: 28, color: "#fff" },
+  heroTime: {
+    fontFamily: fonts.bold,
+    fontSize: 28,
+    lineHeight: 36,
+    color: "#fff",
+    includeFontPadding: true,
+    paddingBottom: 1,
+  },
   heroDur: { color: "rgba(255,255,255,0.9)", marginTop: 8 },
   heroFareBlock: { marginTop: 22, paddingTop: 16, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.25)" },
   heroFareEyebrow: { color: "rgba(255,255,255,0.85)", marginBottom: 4 },
   heroFareRow: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", gap: 10 },
-  heroFare: { fontFamily: fonts.bold, fontSize: 30, color: "#fff" },
-  heroStrike: { fontFamily: fonts.medium, fontSize: 18, color: "rgba(255,255,255,0.55)", textDecorationLine: "line-through" },
+  heroFare: {
+    fontFamily: fonts.bold,
+    fontSize: 30,
+    lineHeight: 38,
+    color: "#fff",
+    includeFontPadding: true,
+    paddingBottom: 1,
+  },
+  heroStrike: {
+    fontFamily: fonts.medium,
+    fontSize: 18,
+    lineHeight: 24,
+    color: "rgba(255,255,255,0.55)",
+    textDecorationLine: "line-through",
+    includeFontPadding: true,
+  },
   heroSave: { color: "rgba(255,255,255,0.9)", marginTop: 6 },
 
   // card
@@ -456,8 +509,34 @@ const styles = StyleSheet.create({
 
   // gallery
   photoStrip: { gap: 12, paddingRight: 8 },
-  photoCard: { width: 132, height: 100, borderRadius: radii.md, padding: 12, justifyContent: "space-between" },
-  photoCardLabel: { color: "rgba(255,255,255,0.95)", fontFamily: fonts.semibold },
+  photoCard: {
+    width: 152,
+    height: 108,
+    borderRadius: radii.md,
+    overflow: "hidden",
+    backgroundColor: palette.slate200,
+  },
+  photoImage: { width: "100%", height: "100%" },
+  photoFallback: {
+    flex: 1,
+    backgroundColor: "#334155",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  photoFallbackText: { color: "#fff", textAlign: "center", fontFamily: fonts.medium },
+  photoCaption: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    bottom: 8,
+    backgroundColor: "rgba(15,23,42,0.62)",
+    borderRadius: radii.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  photoCardLabel: { color: "#fff", fontFamily: fonts.semibold },
 
   // feature chips
   chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

@@ -27,7 +27,6 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
   const rating = Number(schedule.bus.rating_avg || 0);
   const ratingCount = Number(schedule.bus.rating_count || 0);
   const ratingTone = rating >= 4 ? "good" : rating >= 3 ? "warn" : "bad";
-
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.press, pressed && { opacity: 0.96 }]}>
       <View style={styles.card}>
@@ -135,7 +134,14 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1, padding: 13 },
   timesRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  timeBig: { fontFamily: fonts.bold, fontSize: 15, color: palette.slate900 },
+  timeBig: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    lineHeight: 22,
+    color: palette.slate900,
+    includeFontPadding: true,
+    paddingBottom: 1,
+  },
   subMuted: { marginTop: 4, color: palette.slate500, fontFamily: fonts.medium },
   midPill: {
     backgroundColor: palette.indigo50,
@@ -158,8 +164,15 @@ const styles = StyleSheet.create({
   ratingCountText: { marginLeft: 8, color: palette.slate500 },
   fareCol: { alignItems: "flex-end", minWidth: 92, flexShrink: 0 },
   strike: { textDecorationLine: "line-through", color: palette.slate400 },
-  fare: { fontFamily: fonts.bold, fontSize: 16, color: palette.indigo700 },
-  perSeat: { color: palette.slate500, marginTop: 2 },
+  fare: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    lineHeight: 22,
+    color: palette.indigo700,
+    includeFontPadding: true,
+    paddingBottom: 1,
+  },
+  perSeat: { color: palette.slate500, marginTop: 2, lineHeight: 16 },
   offerWrap: { marginTop: 8, gap: 6 },
   ribbon: {
     alignSelf: "flex-start",
