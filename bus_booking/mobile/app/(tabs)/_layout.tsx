@@ -2,6 +2,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Tabs } from "expo-router";
 import React from "react";
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useClientOnlyValue } from "@/components/useClientOnlyValue";
 import { useColorScheme } from "@/components/useColorScheme";
@@ -13,6 +14,7 @@ function TabBarIcon(props: { name: React.ComponentProps<typeof FontAwesome>["nam
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
   const isDark = colorScheme === "dark";
   const tint = palette.indigo600;
   const barBg = isDark ? "#0f172a" : palette.white;
@@ -27,8 +29,9 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: barBg,
           borderTopColor: border,
-          height: Platform.OS === "ios" ? 88 : 64,
+          height: Platform.OS === "ios" ? 64 + insets.bottom : 58 + insets.bottom,
           paddingTop: 6,
+          paddingBottom: Math.max(6, insets.bottom),
         },
         headerShown: useClientOnlyValue(false, true),
         headerTitleStyle: { fontFamily: fonts.semibold, fontSize: 18 },
@@ -40,21 +43,21 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Book",
+          title: "Home",
           tabBarIcon: ({ color }) => <TabBarIcon name="bus" color={color} />,
         }}
       />
       <Tabs.Screen
         name="bookings"
         options={{
-          title: "My trips",
+          title: "Bookings",
           tabBarIcon: ({ color }) => <TabBarIcon name="ticket" color={color} />,
         }}
       />
       <Tabs.Screen
         name="account"
         options={{
-          title: "Account",
+          title: "My Account",
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />

@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,6 +9,7 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette, radii } from "@/constants/theme";
 import { getBookingFlow, mergeBookingFlow } from "@/lib/booking-flow";
+import { getSavedContact, getSavedPassengers, mergeSavedPassengers, setSavedContact } from "@/lib/passenger-memory";
 import { computeFemaleOnlySeatLabels } from "@/lib/seat-rules";
 import { paramOne } from "@/lib/router-params";
 import { routesApi } from "@/lib/api";
@@ -54,6 +56,7 @@ const INDIA_STATES_UT = [
 ];
 
 type PInfo = { name: string; age: string; gender: string };
+type SavedPassengerLite = { name: string; age: string; gender: string };
 
 function isMale(g: string) {
   const u = g.trim().toUpperCase();
@@ -76,15 +79,21 @@ export default function PassengerScreen() {
   const [passengers, setPassengers] = useState<Record<string, PInfo>>({});
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [savedPassengers, setSavedPassengers] = useState<SavedPassengerLite[]>([]);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       const f = await getBookingFlow();
+      const savedContact = await getSavedContact();
+      const savedP = await getSavedPassengers();
       if (!alive) return;
       setFlow(f);
+      setSavedPassengers(savedP.map(({ name, age, gender }) => ({ name, age, gender })));
       if (f?.contact_phone) setPhone(f.contact_phone);
+      else if (savedContact?.phone) setPhone(savedContact.phone);
       if (f?.email) setEmail(f.email);
+      else if (savedContact?.email) setEmail(savedContact.email);
       if (f?.state_of_residence) {
         if (INDIA_STATES_UT.includes(f.state_of_residence)) {
           setStateRes(f.state_of_residence);
@@ -93,8 +102,12 @@ export default function PassengerScreen() {
           setStateRes(f.state_of_residence);
           setStateQuery(f.state_of_residence);
         }
+      } else if (savedContact?.state_of_residence) {
+        setStateRes(savedContact.state_of_residence);
+        setStateQuery(savedContact.state_of_residence);
       }
       if (f?.whatsapp_opt_in !== undefined) setWhatsapp(f.whatsapp_opt_in);
+      else if (savedContact?.whatsapp_opt_in !== undefined) setWhatsapp(savedContact.whatsapp_opt_in);
       if (f?.seats?.length) {
         const p: Record<string, PInfo> = {};
         f.seats.forEach((s) => {
@@ -143,6 +156,18 @@ export default function PassengerScreen() {
     }));
   };
 
+  const applySavedPassengerToSeat = (seat: string, p: SavedPassengerLite) => {
+    setPassengers((prev) => ({
+      ...prev,
+      [seat]: {
+        ...(prev[seat] || { name: "", age: "", gender: "" }),
+        name: p.name,
+        age: p.age,
+        gender: p.gender,
+      },
+    }));
+  };
+
   const onProceed = async () => {
     setErr("");
     if (!phone.trim()) {
@@ -176,6 +201,13 @@ export default function PassengerScreen() {
         state_of_residence: resolvedState,
         whatsapp_opt_in: whatsapp,
         passengers,
+      });
+      await mergeSavedPassengers(Object.values(passengers));
+      await setSavedContact({
+        phone: phone.trim(),
+        email: email.trim(),
+        state_of_residence: resolvedState,
+        whatsapp_opt_in: whatsapp,
       });
       router.push({ pathname: "/payment", params: { schedule_id: String(scheduleId) } });
     } finally {
@@ -242,7 +274,10 @@ export default function PassengerScreen() {
           style={styles.inp}
         />
         <View style={styles.rowBetween}>
-          <AppText variant="body">WhatsApp updates</AppText>
+          <View style={styles.waLabel}>
+            <FontAwesome name="whatsapp" size={16} color="#16a34a" />
+            <AppText variant="body">WhatsApp updates</AppText>
+          </View>
           <Switch value={whatsapp} onValueChange={setWhatsapp} />
         </View>
       </SurfaceCard>
@@ -296,6 +331,21 @@ export default function PassengerScreen() {
           <AppText variant="label" style={styles.lab}>
             Full name *
           </AppText>
+          {savedPassengers.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedRow}>
+              {savedPassengers.slice(0, 8).map((sp, idx) => (
+                <Pressable
+                  key={`${sp.name}-${sp.age}-${sp.gender}-${idx}`}
+                  style={styles.savedChip}
+                  onPress={() => applySavedPassengerToSeat(seat, sp)}
+                >
+                  <AppText variant="caption" style={styles.savedChipTxt}>
+                    {sp.name} · {sp.age} · {sp.gender}
+                  </AppText>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
           <TextInput
             value={passengers[seat]?.name ?? ""}
             onChangeText={(t) => setP(seat, { name: t })}
@@ -374,6 +424,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 16,
   },
+  waLabel: { flexDirection: "row", alignItems: "center", gap: 8 },
   suggestionWrap: {
     marginTop: 8,
     borderWidth: 1,
@@ -392,6 +443,16 @@ const styles = StyleSheet.create({
   suggestionTxt: { color: palette.slate700 },
   suggestionTxtOn: { color: palette.indigo800, fontFamily: fonts.semibold },
   gRow: { flexDirection: "row", gap: 8 },
+  savedRow: { gap: 8, marginBottom: 8, paddingVertical: 2 },
+  savedChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.full,
+    backgroundColor: palette.slate100,
+    borderWidth: 1,
+    borderColor: palette.slate200,
+  },
+  savedChipTxt: { color: palette.slate700, fontFamily: fonts.medium },
   gBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,

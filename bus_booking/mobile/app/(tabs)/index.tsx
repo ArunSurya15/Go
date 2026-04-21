@@ -1,8 +1,9 @@
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Alert,
   Platform,
@@ -19,8 +20,9 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette, radii } from "@/constants/theme";
 import { formatLocalYMD } from "@/lib/date";
-import { routesApi } from "@/lib/api";
+import { bookingApi, routesApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { COIN_RULES, computeCoinWallet } from "@/lib/coins";
 import { useSearchDraft } from "@/lib/search-draft-context";
 
 const SUGGESTED = [
@@ -32,9 +34,35 @@ const SUGGESTED = [
 
 export default function BookHomeScreen() {
   const insets = useSafeAreaInsets();
-  const { access } = useAuth();
+  const { access, getValidToken } = useAuth();
   const { setFrom, setTo } = useSearchDraft();
   const [chipBusy, setChipBusy] = useState<string | null>(null);
+  const [coinEarned, setCoinEarned] = useState(0);
+  const [coinValue, setCoinValue] = useState(0);
+
+  const loadCoins = useCallback(async () => {
+    if (!access) {
+      setCoinEarned(0);
+      setCoinValue(0);
+      return;
+    }
+    try {
+      const token = await getValidToken();
+      if (!token) return;
+      const rows = await bookingApi.list(token);
+      const wallet = computeCoinWallet(rows);
+      setCoinEarned(wallet.earned);
+      setCoinValue(wallet.redeemableRupees);
+    } catch {
+      // keep home resilient
+    }
+  }, [access, getValidToken]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadCoins();
+    }, [loadCoins])
+  );
 
   const openSuggested = async (fromCity: string, toCity: string, label: string) => {
     setChipBusy(label);
@@ -115,6 +143,37 @@ export default function BookHomeScreen() {
               <PrimaryButton title="Start search" onPress={() => router.push("/search")} />
             </View>
           </BlurView>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="Quick access" subtitle="Jump where you need" />
+          <View style={styles.quickRow}>
+            <QuickAction title="Home" icon="home" active onPress={() => router.push("/(tabs)")} />
+            <QuickAction title="My trips" icon="ticket" onPress={() => router.push("/(tabs)/bookings")} />
+            <QuickAction title="My account" icon="user" onPress={() => router.push("/(tabs)/account")} />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <SurfaceCard style={styles.coinCard}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="label" style={{ color: palette.indigo800 }}>e-GO Coins</AppText>
+                <AppText variant="title" style={{ fontSize: 24, lineHeight: 30, marginTop: 2 }}>
+                  {coinEarned} coins
+                </AppText>
+                <AppText variant="caption" style={{ color: palette.slate600, marginTop: 2 }}>
+                  Redeemable value: ₹{coinValue}
+                </AppText>
+              </View>
+              <View style={styles.coinBadge}>
+                <AppText variant="label" style={{ color: palette.indigo700 }}>₹1 = 1 coin</AppText>
+              </View>
+            </View>
+            <AppText variant="caption" style={{ color: palette.slate500, marginTop: 10 }}>
+              Earn rule: {COIN_RULES.earnPer100Rupees} coin per ₹100 (minimum {COIN_RULES.minCoinsPerTrip} coins per confirmed trip). You can use coins for up to {Math.round(COIN_RULES.maxRedeemPct * 100)}% of a booking.
+            </AppText>
+          </SurfaceCard>
         </View>
 
         <View style={styles.section}>
@@ -204,6 +263,16 @@ const styles = StyleSheet.create({
   floatTitle: { fontSize: 16, marginBottom: 8, color: palette.indigo900 },
   floatBody: { marginBottom: 18, color: palette.slate700, lineHeight: 22 },
   section: { paddingHorizontal: 20, marginTop: 24 },
+  quickRow: { flexDirection: "row", gap: 10 },
+  coinCard: { marginTop: 4, borderColor: palette.indigo100, backgroundColor: "#f8faff" },
+  coinBadge: {
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: palette.indigo200,
+    backgroundColor: palette.indigo50,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   chip: {
     paddingVertical: 10,
@@ -230,4 +299,46 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
   },
   pillText: { color: palette.indigo800, fontFamily: fonts.medium },
+});
+
+function QuickAction({
+  title,
+  icon,
+  onPress,
+  active,
+}: {
+  title: string;
+  icon: "home" | "ticket" | "user";
+  onPress: () => void;
+  active?: boolean;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[stylesQa.base, active && stylesQa.active]}>
+      <AppText variant="caption" style={[stylesQa.icon, active && stylesQa.iconOn]}>
+        {icon === "home" ? "⌂" : icon === "ticket" ? "🎟" : "👤"}
+      </AppText>
+      <AppText variant="caption" style={[stylesQa.txt, active && stylesQa.txtOn]}>
+        {title}
+      </AppText>
+    </Pressable>
+  );
+}
+
+const stylesQa = StyleSheet.create({
+  base: {
+    flex: 1,
+    borderRadius: radii.md,
+    backgroundColor: palette.white,
+    borderWidth: 1,
+    borderColor: palette.slate200,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  active: { borderColor: palette.indigo300, backgroundColor: palette.indigo50 },
+  icon: { color: palette.slate500, fontSize: 14, lineHeight: 16 },
+  iconOn: { color: palette.indigo700 },
+  txt: { color: palette.slate700, fontFamily: fonts.medium },
+  txtOn: { color: palette.indigo700, fontFamily: fonts.semibold },
 });

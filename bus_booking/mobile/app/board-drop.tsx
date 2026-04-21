@@ -122,9 +122,9 @@ export default function BoardDropScreen() {
                   }}
                   style={[styles.pointRow, sel && styles.pointRowSel]}
                 >
-                  <AppText style={styles.time}>{formatPointTime(bp.time)}</AppText>
+                  <AppText variant="label" style={styles.time}>{formatPointTime(bp.time)}</AppText>
                   <View style={{ flex: 1 }}>
-                    <AppText style={styles.loc}>{bp.location_name}</AppText>
+                    <AppText variant="body" style={styles.loc}>{bp.location_name}</AppText>
                     {bp.landmark ? (
                       <AppText variant="caption" style={{ color: palette.slate500 }}>
                         {bp.landmark}
@@ -156,9 +156,9 @@ export default function BoardDropScreen() {
                   onPress={() => setDroppingId(dp.id)}
                   style={[styles.pointRow, sel && styles.pointRowSel]}
                 >
-                  <AppText style={styles.time}>{formatPointTime(dp.time)}</AppText>
+                  <AppText variant="label" style={styles.time}>{formatPointTime(dp.time)}</AppText>
                   <View style={{ flex: 1 }}>
-                    <AppText style={styles.loc}>{dp.location_name}</AppText>
+                    <AppText variant="body" style={styles.loc}>{dp.location_name}</AppText>
                     {dp.description ? (
                       <AppText variant="caption" style={{ color: palette.slate500 }}>
                         {dp.description}
@@ -212,8 +212,8 @@ const styles = StyleSheet.create({
     borderColor: palette.indigo500,
     backgroundColor: palette.indigo50,
   },
-  time: { fontFamily: fonts.semibold, width: 48, color: palette.indigo700 },
-  loc: { fontFamily: fonts.medium, fontSize: 15 },
+  time: { width: 52, color: palette.indigo700, textAlign: "left" },
+  loc: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, color: palette.slate800 },
   radio: {
     width: 18,
     height: 18,

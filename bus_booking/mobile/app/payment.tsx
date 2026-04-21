@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -10,10 +10,12 @@ import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette, radii } from "@/constants/theme";
 import { formatRupee } from "@/lib/format";
 import { getApiBase } from "@/lib/config";
-import { clearBookingFlow, getBookingFlow } from "@/lib/booking-flow";
+import { clearBookingFlow, getBookingFlow, mergeBookingFlow } from "@/lib/booking-flow";
 import { bookingApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { seatFareBreakup } from "@/lib/fare-breakup";
+
+const TRIP_PROTECTION_PLUS_FEE = 49;
 
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
@@ -22,9 +24,22 @@ export default function PaymentScreen() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [breakupOpen, setBreakupOpen] = useState(false);
+  const [freeCancellation, setFreeCancellation] = useState(false);
+  const [travelInsurance, setTravelInsurance] = useState(false);
+  const [useCoins, setUseCoins] = useState(false);
+  const [prioritySupport, setPrioritySupport] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
-    void getBookingFlow().then(setFlow);
+    void getBookingFlow().then((f) => {
+      setFlow(f);
+      if (!f) return;
+      setFreeCancellation(Boolean(f.add_on_free_cancellation));
+      setTravelInsurance(Boolean(f.add_on_insurance));
+      setUseCoins(Boolean(f.add_on_use_coins));
+      setPrioritySupport(Boolean(f.add_on_priority_support || f.add_on_donation));
+      setTermsAccepted(Boolean(f.terms_accepted));
+    });
   }, []);
 
   const simulatePayment = async (orderId: string) => {
@@ -48,10 +63,23 @@ export default function PaymentScreen() {
     }
     const token = await getValidToken();
     if (!token) { router.push("/login"); return; }
+    if (!termsAccepted) {
+      setErr("Please accept Terms & Conditions and Cancellation Policy.");
+      return;
+    }
     setBusy(true);
     try {
-      const amount =
-        latest.amount || String(parseFloat(latest.fare || "0") * (latest.seats?.length ?? 0));
+      await mergeBookingFlow({
+        add_on_free_cancellation: freeCancellation,
+        add_on_insurance: travelInsurance,
+        add_on_use_coins: useCoins,
+        add_on_priority_support: prioritySupport,
+        add_on_donation: false,
+        terms_accepted: termsAccepted,
+      });
+      const baseAmount =
+        parseFloat(latest.amount || String(parseFloat(latest.fare || "0") * (latest.seats?.length ?? 0))) || 0;
+      const amount = String((baseAmount + (prioritySupport ? TRIP_PROTECTION_PLUS_FEE : 0)).toFixed(2));
       const payload = {
         schedule_id: latest.schedule_id,
         seats: latest.seats,
@@ -96,9 +124,11 @@ export default function PaymentScreen() {
   // ── derived fare data ──────────────────────────────────────────────────────
   const seatCount = flow.seats?.length ?? 1;
   const farePerSeat = parseFloat(flow.fare || "0");
-  const totalAmount = parseFloat(flow.amount || String(farePerSeat * seatCount));
+  const baseTotalAmount = parseFloat(flow.amount || String(farePerSeat * seatCount));
+  const protectionFee = prioritySupport ? TRIP_PROTECTION_PLUS_FEE : 0;
+  const totalAmount = baseTotalAmount + protectionFee;
   const perSeatBreakup = seatFareBreakup(farePerSeat);
-  const totalBreakup = seatFareBreakup(totalAmount);
+  const totalBreakup = seatFareBreakup(baseTotalAmount);
   const gstPct = Math.round(perSeatBreakup.gstRate * 100);
 
   return (
@@ -187,6 +217,14 @@ export default function PaymentScreen() {
                   {formatRupee(totalBreakup.platformFee)}
                 </AppText>
               </View>
+              {protectionFee > 0 ? (
+                <View style={styles.breakRow}>
+                  <AppText variant="body" style={styles.breakLabel}>Trip Protection Plus fee</AppText>
+                  <AppText variant="body" style={styles.breakVal}>
+                    {formatRupee(protectionFee)}
+                  </AppText>
+                </View>
+              ) : null}
               <View style={[styles.breakRow, styles.breakTotalRow]}>
                 <AppText style={styles.breakTotalLabel}>Total you pay</AppText>
                 <AppText style={styles.breakTotalVal}>{formatRupee(totalAmount)}</AppText>
@@ -196,6 +234,100 @@ export default function PaymentScreen() {
               </AppText>
             </View>
           )}
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.card}>
+          <AppText variant="label" style={styles.cardLabel}>Booking add-ons</AppText>
+          <AddOnRow
+            icon="shield-check-outline"
+            title="Free cancellation"
+            subtitle="Cancel >24h before departure: 100% fare refund. 6-24h: 50%. <6h: no refund."
+            details="Convenience fee and GST are non-refundable. Operator-cancelled trips are fully refunded as per policy."
+            value={freeCancellation}
+            onValueChange={setFreeCancellation}
+          />
+          <View style={styles.tierWrap}>
+            <View style={[styles.tierChip, { backgroundColor: "#dcfce7" }]}>
+              <AppText variant="caption" style={[styles.tierTxt, { color: "#166534" }]}>24h+ : 100%</AppText>
+            </View>
+            <View style={[styles.tierChip, { backgroundColor: "#fef3c7" }]}>
+              <AppText variant="caption" style={[styles.tierTxt, { color: "#92400e" }]}>6-24h : 50%</AppText>
+            </View>
+            <View style={[styles.tierChip, { backgroundColor: "#fee2e2" }]}>
+              <AppText variant="caption" style={[styles.tierTxt, { color: "#991b1b" }]}>&lt;6h : 0%</AppText>
+            </View>
+          </View>
+          <AddOnRow
+            icon="medical-bag"
+            title="Travel insurance"
+            subtitle="Coverage for accidental hospitalization and baggage incidents during trip."
+            details="Insurance terms are issued by partner insurer at booking confirmation and shown on your ticket."
+            value={travelInsurance}
+            onValueChange={setTravelInsurance}
+          />
+          <AddOnRow
+            icon="wallet-giftcard"
+            title="Use e-GO coins"
+            subtitle="Use your earned coins now and save on this booking."
+            details="Coins are credited after eligible completed trips and can be converted to booking discounts."
+            value={useCoins}
+            onValueChange={setUseCoins}
+          />
+          <AddOnRow
+            icon="lightning-bolt-circle"
+            title={`Trip Protection Plus · ${formatRupee(TRIP_PROTECTION_PLUS_FEE)}`}
+            subtitle="Priority handling if your trip is disrupted."
+            details="Includes: 15-minute support callback window, one assisted rebooking attempt without service fee, and fallback support credit for verified no-show."
+            value={prioritySupport}
+            onValueChange={setPrioritySupport}
+          />
+          {prioritySupport ? (
+            <View style={styles.protectionRuleBox}>
+              <AppText variant="caption" style={styles.protectionRuleTitle}>Trip Protection Plus terms</AppText>
+              <AppText variant="caption" style={styles.protectionRuleTxt}>
+                • Fixed fee: {formatRupee(TRIP_PROTECTION_PLUS_FEE)} per booking.
+              </AppText>
+              <AppText variant="caption" style={styles.protectionRuleTxt}>
+                • Fee is non-refundable once travel starts.
+              </AppText>
+              <AppText variant="caption" style={styles.protectionRuleTxt}>
+                • Rebooking support depends on seat availability on alternate operators.
+              </AppText>
+            </View>
+          ) : null}
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.card}>
+          <Pressable style={styles.termsRow} onPress={() => setTermsAccepted((v) => !v)}>
+            <View style={[styles.tickBox, termsAccepted && styles.tickBoxOn]}>
+              {termsAccepted ? <AppText style={styles.tickTxt}>✓</AppText> : null}
+            </View>
+            <AppText variant="body" style={{ flex: 1, color: palette.slate700 }}>
+              I accept Terms & Conditions and Cancellation Policy.
+            </AppText>
+          </Pressable>
+          <View style={styles.policyBox}>
+            <AppText variant="caption" style={styles.policyTitle}>What you are accepting</AppText>
+            <AppText variant="caption" style={styles.policyTxt}>
+              • Cancellation policy follows your platform rules (full / partial / no-refund windows based on departure time).
+            </AppText>
+            <AppText variant="caption" style={styles.policyTxt}>
+              • Refunds go to original payment method. Convenience fee/GST rules apply as listed in policy pages.
+            </AppText>
+            <AppText variant="caption" style={styles.policyTxt}>
+              • Terms include passenger responsibilities, operator obligations, and dispute handling process.
+            </AppText>
+            <View style={styles.policyLinks}>
+              <Pressable onPress={() => router.push("/cancellation-policy")} style={styles.policyBtn}>
+                <MaterialCommunityIcons name="file-document-outline" size={14} color={palette.indigo700} />
+                <AppText variant="caption" style={styles.policyBtnTxt}>Read cancellation policy</AppText>
+              </Pressable>
+              <Pressable onPress={() => router.push("/terms")} style={styles.policyBtn}>
+                <MaterialCommunityIcons name="shield-account-outline" size={14} color={palette.indigo700} />
+                <AppText variant="caption" style={styles.policyBtnTxt}>Read terms & conditions</AppText>
+              </Pressable>
+            </View>
+          </View>
         </SurfaceCard>
 
         {err ? (
@@ -278,4 +410,87 @@ const styles = StyleSheet.create({
   stickyLabel: { color: palette.slate500 },
   stickyAmount: { fontFamily: fonts.bold, fontSize: 22, color: palette.indigo700 },
   stickyBtn: { flex: 1.6 },
+  termsRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  tickBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: palette.slate300,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tickBoxOn: { backgroundColor: palette.indigo600, borderColor: palette.indigo600 },
+  tickTxt: { color: palette.white, fontFamily: fonts.bold, fontSize: 12, lineHeight: 12 },
+  policyBox: {
+    marginTop: 10,
+    marginLeft: 30,
+    borderRadius: radii.md,
+    backgroundColor: palette.slate50,
+    borderWidth: 1,
+    borderColor: palette.slate100,
+    padding: 10,
+    gap: 4,
+  },
+  policyTitle: { color: palette.slate700, fontFamily: fonts.semibold },
+  policyTxt: { color: palette.slate500, lineHeight: 16 },
+  protectionRuleBox: {
+    marginTop: 8,
+    marginLeft: 26,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.slate200,
+    backgroundColor: palette.slate50,
+    padding: 10,
+    gap: 4,
+  },
+  protectionRuleTitle: { color: palette.slate700, fontFamily: fonts.semibold },
+  protectionRuleTxt: { color: palette.slate500, lineHeight: 16 },
+  policyLinks: { marginTop: 8, gap: 8 },
+  policyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: palette.indigo50,
+    borderRadius: radii.full,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  policyBtnTxt: { color: palette.indigo700, fontFamily: fonts.semibold },
+  tierWrap: { flexDirection: "row", gap: 8, marginTop: 4, marginBottom: 6, paddingLeft: 26, flexWrap: "wrap" },
+  tierChip: { borderRadius: radii.full, paddingHorizontal: 10, paddingVertical: 5 },
+  tierTxt: { fontFamily: fonts.semibold },
 });
+
+function AddOnRow({
+  icon,
+  title,
+  subtitle,
+  details,
+  value,
+  onValueChange,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  title: string;
+  subtitle: string;
+  details: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+}) {
+  return (
+    <View style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: palette.slate100 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <MaterialCommunityIcons name={icon} size={18} color={palette.indigo600} />
+            <AppText variant="body" style={{ color: palette.slate800 }}>{title}</AppText>
+          </View>
+          <AppText variant="caption" style={{ color: palette.slate500 }}>{subtitle}</AppText>
+          <AppText variant="caption" style={{ color: palette.slate400, marginTop: 2 }}>{details}</AppText>
+        </View>
+        <Switch value={value} onValueChange={onValueChange} />
+      </View>
+    </View>
+  );
+}

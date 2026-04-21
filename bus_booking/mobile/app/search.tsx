@@ -33,6 +33,7 @@ export default function SearchScreen() {
   const [dateYmd, setDateYmd] = useState(today);
   const [busy, setBusy] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [swapFlipped, setSwapFlipped] = useState(false);
   const [recentTrips, setRecentTrips] = useState<RecentTrip[]>([]);
 
   const dateValue = useMemo(() => parseYMD(dateYmd) ?? new Date(), [dateYmd]);
@@ -171,12 +172,24 @@ export default function SearchScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Swap origin and destination"
-                  onPress={swap}
+                  onPress={() => {
+                    swap();
+                    setSwapFlipped((v) => !v);
+                  }}
                   style={({ pressed }) => [styles.swapFab, pressed && { opacity: 0.9 }]}
                 >
                   <View style={styles.swapDoubleArrows} accessibilityElementsHidden>
-                    <FontAwesome name="long-arrow-right" size={11} color="#fff" />
-                    <FontAwesome name="long-arrow-left" size={11} color="#fff" style={{ marginTop: 1 }} />
+                    {swapFlipped ? (
+                      <>
+                        <FontAwesome name="long-arrow-down" size={11} color="#fff" />
+                        <FontAwesome name="long-arrow-up" size={11} color="#fff" style={{ marginLeft: 6 }} />
+                      </>
+                    ) : (
+                      <>
+                        <FontAwesome name="long-arrow-up" size={11} color="#fff" />
+                        <FontAwesome name="long-arrow-down" size={11} color="#fff" style={{ marginLeft: 6 }} />
+                      </>
+                    )}
                   </View>
                 </Pressable>
               </View>
@@ -268,7 +281,6 @@ export default function SearchScreen() {
                 onPress={() => void runSearch()}
                 style={{ marginTop: 16 }}
               />
-              <PrimaryButton title="Close" variant="outline" onPress={() => router.back()} style={{ marginTop: 8 }} />
             </SurfaceCard>
           </ScrollView>
         </LinearGradient>
@@ -315,6 +327,7 @@ const styles = StyleSheet.create({
     marginRight: 40,
   },
   swapDoubleArrows: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },

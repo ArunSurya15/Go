@@ -80,6 +80,8 @@ function RootLayoutNav() {
             <Stack.Screen name="board-drop" options={{ title: "Board & drop", headerShadowVisible: false }} />
             <Stack.Screen name="passenger" options={{ title: "Passengers", headerShadowVisible: false }} />
             <Stack.Screen name="payment" options={{ title: "Payment", headerShadowVisible: false }} />
+            <Stack.Screen name="cancellation-policy" options={{ title: "Cancellation policy", headerShadowVisible: false }} />
+            <Stack.Screen name="terms" options={{ title: "Terms & conditions", headerShadowVisible: false }} />
             <Stack.Screen name="booking/[id]" options={{ title: "Confirmed", headerShadowVisible: false }} />
           </Stack>
         </SearchDraftProvider>
