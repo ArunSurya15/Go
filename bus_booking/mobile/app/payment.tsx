@@ -13,9 +13,11 @@ import { getApiBase } from "@/lib/config";
 import { clearBookingFlow, getBookingFlow, mergeBookingFlow } from "@/lib/booking-flow";
 import { bookingApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { COIN_RULES, computeCoinWallet } from "@/lib/coins";
 import { seatFareBreakup } from "@/lib/fare-breakup";
 
 const TRIP_PROTECTION_PLUS_FEE = 49;
+const EXTENDED_CANCELLATION_FEE = 69;
 
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
@@ -24,23 +26,46 @@ export default function PaymentScreen() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [breakupOpen, setBreakupOpen] = useState(false);
-  const [freeCancellation, setFreeCancellation] = useState(false);
+  const [extendedCancellation, setExtendedCancellation] = useState(false);
   const [travelInsurance, setTravelInsurance] = useState(false);
   const [useCoins, setUseCoins] = useState(false);
   const [prioritySupport, setPrioritySupport] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [coinEarned, setCoinEarned] = useState(0);
+  const [coinValue, setCoinValue] = useState(0);
 
   useEffect(() => {
     void getBookingFlow().then((f) => {
       setFlow(f);
       if (!f) return;
-      setFreeCancellation(Boolean(f.add_on_free_cancellation));
+      setExtendedCancellation(Boolean(f.add_on_free_cancellation));
       setTravelInsurance(Boolean(f.add_on_insurance));
       setUseCoins(Boolean(f.add_on_use_coins));
       setPrioritySupport(Boolean(f.add_on_priority_support || f.add_on_donation));
       setTermsAccepted(Boolean(f.terms_accepted));
     });
   }, []);
+
+  useEffect(() => {
+    if (!isReady || !access) return;
+    let mounted = true;
+    void (async () => {
+      try {
+        const token = await getValidToken();
+        if (!token) return;
+        const rows = await bookingApi.list(token);
+        if (!mounted) return;
+        const wallet = computeCoinWallet(rows);
+        setCoinEarned(wallet.earned);
+        setCoinValue(wallet.redeemableRupees);
+      } catch {
+        // Wallet is non-blocking UI info only.
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [access, getValidToken, isReady]);
 
   const simulatePayment = async (orderId: string) => {
     const base = getApiBase();
@@ -70,7 +95,7 @@ export default function PaymentScreen() {
     setBusy(true);
     try {
       await mergeBookingFlow({
-        add_on_free_cancellation: freeCancellation,
+        add_on_free_cancellation: extendedCancellation,
         add_on_insurance: travelInsurance,
         add_on_use_coins: useCoins,
         add_on_priority_support: prioritySupport,
@@ -79,7 +104,11 @@ export default function PaymentScreen() {
       });
       const baseAmount =
         parseFloat(latest.amount || String(parseFloat(latest.fare || "0") * (latest.seats?.length ?? 0))) || 0;
-      const amount = String((baseAmount + (prioritySupport ? TRIP_PROTECTION_PLUS_FEE : 0)).toFixed(2));
+      const extendedCancelFee = extendedCancellation ? EXTENDED_CANCELLATION_FEE : 0;
+      const addOnAmount = extendedCancelFee + (prioritySupport ? TRIP_PROTECTION_PLUS_FEE : 0);
+      const maxCoinRedeem = Math.floor((baseAmount + addOnAmount) * COIN_RULES.maxRedeemPct);
+      const coinDiscount = useCoins ? Math.max(0, Math.min(coinValue, maxCoinRedeem)) : 0;
+      const amount = String(Math.max(0, baseAmount + addOnAmount - coinDiscount).toFixed(2));
       const payload = {
         schedule_id: latest.schedule_id,
         seats: latest.seats,
@@ -125,8 +154,12 @@ export default function PaymentScreen() {
   const seatCount = flow.seats?.length ?? 1;
   const farePerSeat = parseFloat(flow.fare || "0");
   const baseTotalAmount = parseFloat(flow.amount || String(farePerSeat * seatCount));
+  const extendedCancelFee = extendedCancellation ? EXTENDED_CANCELLATION_FEE : 0;
   const protectionFee = prioritySupport ? TRIP_PROTECTION_PLUS_FEE : 0;
-  const totalAmount = baseTotalAmount + protectionFee;
+  const grossTotalAmount = baseTotalAmount + extendedCancelFee + protectionFee;
+  const maxCoinRedeem = Math.floor(grossTotalAmount * COIN_RULES.maxRedeemPct);
+  const coinDiscount = useCoins ? Math.max(0, Math.min(coinValue, maxCoinRedeem)) : 0;
+  const totalAmount = Math.max(0, grossTotalAmount - coinDiscount);
   const perSeatBreakup = seatFareBreakup(farePerSeat);
   const totalBreakup = seatFareBreakup(baseTotalAmount);
   const gstPct = Math.round(perSeatBreakup.gstRate * 100);
@@ -225,6 +258,22 @@ export default function PaymentScreen() {
                   </AppText>
                 </View>
               ) : null}
+              {extendedCancelFee > 0 ? (
+                <View style={styles.breakRow}>
+                  <AppText variant="body" style={styles.breakLabel}>Extended cancellation cover fee</AppText>
+                  <AppText variant="body" style={styles.breakVal}>
+                    {formatRupee(extendedCancelFee)}
+                  </AppText>
+                </View>
+              ) : null}
+              {coinDiscount > 0 ? (
+                <View style={styles.breakRow}>
+                  <AppText variant="body" style={styles.breakLabel}>e-GO coins applied</AppText>
+                  <AppText variant="body" style={[styles.breakVal, { color: "#166534" }]}>
+                    -{formatRupee(coinDiscount)}
+                  </AppText>
+                </View>
+              ) : null}
               <View style={[styles.breakRow, styles.breakTotalRow]}>
                 <AppText style={styles.breakTotalLabel}>Total you pay</AppText>
                 <AppText style={styles.breakTotalVal}>{formatRupee(totalAmount)}</AppText>
@@ -240,11 +289,11 @@ export default function PaymentScreen() {
           <AppText variant="label" style={styles.cardLabel}>Booking add-ons</AppText>
           <AddOnRow
             icon="shield-check-outline"
-            title="Free cancellation"
-            subtitle="Cancel >24h before departure: 100% fare refund. 6-24h: 50%. <6h: no refund."
-            details="Convenience fee and GST are non-refundable. Operator-cancelled trips are fully refunded as per policy."
-            value={freeCancellation}
-            onValueChange={setFreeCancellation}
+            title={`Extended cancellation cover · ${formatRupee(EXTENDED_CANCELLATION_FEE)}`}
+            subtitle="Standard policy is included by default. Add this to allow cancellation up to 2 hours before departure."
+            details="Without this add-on: >24h 100%, 6-24h 50%, <6h no refund (operator policy)."
+            value={extendedCancellation}
+            onValueChange={setExtendedCancellation}
           />
           <View style={styles.tierWrap}>
             <View style={[styles.tierChip, { backgroundColor: "#dcfce7" }]}>
@@ -268,8 +317,8 @@ export default function PaymentScreen() {
           <AddOnRow
             icon="wallet-giftcard"
             title="Use e-GO coins"
-            subtitle="Use your earned coins now and save on this booking."
-            details="Coins are credited after eligible completed trips and can be converted to booking discounts."
+            subtitle={`Wallet: ${coinEarned} coins (${formatRupee(coinValue)}). Max usable now: ${formatRupee(maxCoinRedeem)}.`}
+            details={`Applied on this booking: ${formatRupee(coinDiscount)}${useCoins && coinDiscount === 0 ? " (no eligible coin balance for this fare cap)." : ""}`}
             value={useCoins}
             onValueChange={setUseCoins}
           />

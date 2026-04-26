@@ -75,7 +75,10 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
             subStyle: styles.dealSubGold,
           };
   const sparklePulse = useRef(new Animated.Value(0)).current;
+  const sparkleDrift = useRef(new Animated.Value(0)).current;
   const stripFloat = useRef(new Animated.Value(0)).current;
+  const ribbonSweep = useRef(new Animated.Value(0)).current;
+  const ribbonSweepThin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!hasExclusiveOffer) return;
@@ -83,14 +86,30 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
       Animated.sequence([
         Animated.timing(sparklePulse, {
           toValue: 1,
-          duration: 850,
-          easing: Easing.out(Easing.quad),
+          duration: 980,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(sparklePulse, {
           toValue: 0,
-          duration: 850,
-          easing: Easing.inOut(Easing.quad),
+          duration: 980,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const drift = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sparkleDrift, {
+          toValue: 1,
+          duration: 1300,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sparkleDrift, {
+          toValue: 0,
+          duration: 1300,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
@@ -99,39 +118,80 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
       Animated.sequence([
         Animated.timing(stripFloat, {
           toValue: 1,
-          duration: 1050,
+          duration: 1450,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(stripFloat, {
           toValue: 0,
-          duration: 1050,
+          duration: 1450,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
+    const ribbonMainLoop = Animated.loop(
+      Animated.timing(ribbonSweep, {
+        toValue: 1,
+        duration: 1700,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    const ribbonThinLoop = Animated.loop(
+      Animated.timing(ribbonSweepThin, {
+        toValue: 1,
+        duration: 1800,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
     pulse.start();
+    drift.start();
     floaty.start();
+    ribbonMainLoop.start();
+    ribbonThinLoop.start();
     return () => {
       pulse.stop();
+      drift.stop();
       floaty.stop();
+      ribbonMainLoop.stop();
+      ribbonThinLoop.stop();
       sparklePulse.setValue(0);
+      sparkleDrift.setValue(0);
       stripFloat.setValue(0);
+      ribbonSweep.setValue(0);
+      ribbonSweepThin.setValue(0);
     };
-  }, [hasExclusiveOffer, sparklePulse, stripFloat]);
+  }, [hasExclusiveOffer, ribbonSweep, ribbonSweepThin, sparkleDrift, sparklePulse, stripFloat]);
 
   const sparkleScale = sparklePulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.14],
+    outputRange: [1, 1.09],
   });
   const sparkleRotate = sparklePulse.interpolate({
     inputRange: [0, 1],
-    outputRange: ["0deg", "10deg"],
+    outputRange: ["0deg", "6deg"],
+  });
+  const sparkleOpacity = sparklePulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.86, 1],
+  });
+  const sparkleTranslateX = sparkleDrift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-1.2, 1.2],
   });
   const stripTranslateY = stripFloat.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -1.6],
+    outputRange: [0, -1.1],
+  });
+  const ribbonSweepX = ribbonSweep.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-132, 132],
+  });
+  const ribbonSweepThinX = ribbonSweepThin.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-132, 132],
   });
   const ratingTone = rating >= 4 ? "good" : rating >= 3 ? "warn" : "bad";
   return (
@@ -140,6 +200,24 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
         {hasExclusiveOffer ? (
           <View style={styles.cornerRibbonClip}>
             <View style={[styles.cornerRibbonBand, toneMeta.ribbonStyle]}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.ribbonSweepMain,
+                  {
+                    transform: [{ translateX: ribbonSweepX }, { rotate: "-8deg" }],
+                  },
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.ribbonSweepThin,
+                  {
+                    transform: [{ translateX: ribbonSweepThinX }, { rotate: "-8deg" }],
+                  },
+                ]}
+              />
               <AppText numberOfLines={1} style={styles.cornerRibbonText}>
                 {toneMeta.ribbon}
               </AppText>
@@ -163,7 +241,14 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
                 style={[
                   styles.dealSparkWrap,
                   toneMeta.spark,
-                  { transform: [{ scale: sparkleScale }, { rotate: sparkleRotate }] },
+                  {
+                    opacity: sparkleOpacity,
+                    transform: [
+                      { translateX: sparkleTranslateX },
+                      { scale: sparkleScale },
+                      { rotate: sparkleRotate },
+                    ],
+                  },
                 ]}
               >
                 <FontAwesome name={toneMeta.icon} size={11} color={dealTone === "flash" ? "#7f1d1d" : "#92400e"} />
@@ -314,11 +399,28 @@ const styles = StyleSheet.create({
     top: 20,
     left: -30,
     width: 120,
+    overflow: "hidden",
     paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
     transform: [{ rotate: "-45deg" }],
     elevation: 2,
+  },
+  ribbonSweepMain: {
+    position: "absolute",
+    left: 0,
+    top: -3,
+    width: 20,
+    height: 28,
+    backgroundColor: "rgba(255,255,255,0.28)",
+  },
+  ribbonSweepThin: {
+    position: "absolute",
+    left: 0,
+    top: -3,
+    width: 10,
+    height: 28,
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
   cornerRibbonGold: { backgroundColor: "#f59e0b" },
   cornerRibbonFlash: { backgroundColor: "#ef4444" },
