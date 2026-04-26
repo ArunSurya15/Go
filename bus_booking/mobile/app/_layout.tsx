@@ -9,13 +9,15 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
-import { useColorScheme } from "react-native";
+import { useEffect, useState } from "react";
+import { StyleSheet, useColorScheme, View } from "react-native";
 import "react-native-reanimated";
 
 import { AuthProvider } from "@/lib/auth-context";
 import { SearchDraftProvider } from "@/lib/search-draft-context";
 import { egoDarkTheme, egoLightTheme } from "@/constants/navigation-theme";
+import { palette } from "@/constants/theme";
+import { CuteBusLoader } from "@/components/ui/CuteBusLoader";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -33,6 +35,7 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     ...FontAwesome.font,
   });
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     if (error) throw error;
@@ -42,7 +45,20 @@ export default function RootLayout() {
     if (loaded) SplashScreen.hideAsync();
   }, [loaded]);
 
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(() => setShowIntro(false), 1300);
+    return () => clearTimeout(t);
+  }, [loaded]);
+
   if (!loaded) return null;
+  if (showIntro) {
+    return (
+      <View style={styles.introWrap}>
+        <CuteBusLoader title="Welcome to e-GO" subtitle="Fast booking. Better bus journeys." />
+      </View>
+    );
+  }
 
   return <RootLayoutNav />;
 }
@@ -89,3 +105,12 @@ function RootLayoutNav() {
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  introWrap: {
+    flex: 1,
+    backgroundColor: palette.slate50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

@@ -4,7 +4,6 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Modal,
@@ -19,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScheduleTripCard } from "@/components/schedule/ScheduleTripCard";
 import { AppText } from "@/components/ui/AppText";
 import { AppProblemState } from "@/components/ui/AppProblemState";
+import { CuteBusLoader } from "@/components/ui/CuteBusLoader";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette } from "@/constants/theme";
@@ -227,10 +227,7 @@ export default function ScheduleResultsScreen() {
   if (loading && rows.length === 0) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={palette.indigo600} />
-        <AppText variant="body" style={{ marginTop: 16, color: palette.slate500 }}>
-          Finding buses…
-        </AppText>
+        <CuteBusLoader title="Finding buses..." subtitle="Sorting fares, ratings and deals" />
       </View>
     );
   }

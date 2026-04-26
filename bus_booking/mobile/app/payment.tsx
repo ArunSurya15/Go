@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AppText } from "@/components/ui/AppText";
+import { CuteBusLoader } from "@/components/ui/CuteBusLoader";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { SurfaceCard } from "@/components/ui/SurfaceCard";
 import { fonts, palette, radii } from "@/constants/theme";
@@ -145,7 +146,7 @@ export default function PaymentScreen() {
   if (!flow?.schedule_id) {
     return (
       <View style={[styles.center, { padding: 20 }]}>
-        <AppText style={{ textAlign: "center" }}>Loading booking…</AppText>
+        <CuteBusLoader compact title="Loading booking..." subtitle="" />
       </View>
     );
   }
@@ -465,7 +466,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: palette.slate300,
+    borderColor: palette.slate200,
     alignItems: "center",
     justifyContent: "center",
   },
