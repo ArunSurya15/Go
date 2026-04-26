@@ -1,5 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -57,23 +58,37 @@ export default function ScheduleResultsScreen() {
   const [singleSeatOnly, setSingleSeatOnly] = useState(false);
   const [highRatedOnly, setHighRatedOnly] = useState(false);
   const [liveTrackingOnly, setLiveTrackingOnly] = useState(false);
-  const filterScrollX = useRef(new Animated.Value(0)).current;
 
-  const filterPillWidth = filterScrollX.interpolate({
-    inputRange: [0, 64],
-    outputRange: [76, 0],
+  /** Horizontal offset of chip row; drives cross-fade between full pill and icon pill. */
+  const filterChipScrollX = useRef(new Animated.Value(0)).current;
+  const FILTER_PILL_FADE_IN = 42;
+  const filterPillFullOpacity = filterChipScrollX.interpolate({
+    inputRange: [0, 10, 24, FILTER_PILL_FADE_IN],
+    outputRange: [1, 0.9, 0.35, 0],
     extrapolate: "clamp",
   });
-  const filterBtnWidth = filterScrollX.interpolate({
-    inputRange: [0, 64],
-    outputRange: [128, 38],
+  const filterPillIconOpacity = filterChipScrollX.interpolate({
+    inputRange: [0, 16, 28, FILTER_PILL_FADE_IN],
+    outputRange: [0, 0.2, 0.72, 1],
     extrapolate: "clamp",
   });
-  const filterLabelOpacity = filterScrollX.interpolate({
-    inputRange: [0, 18, 50],
-    outputRange: [1, 0.35, 0],
+  const filterPillLabelOpacity = filterChipScrollX.interpolate({
+    inputRange: [0, 8, 20, 30, FILTER_PILL_FADE_IN],
+    outputRange: [1, 0.95, 0.55, 0.12, 0],
     extrapolate: "clamp",
   });
+  const filterPillLabelTranslateX = filterChipScrollX.interpolate({
+    inputRange: [0, FILTER_PILL_FADE_IN],
+    outputRange: [0, -5],
+    extrapolate: "clamp",
+  });
+  const onFilterChipsScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { x: filterChipScrollX } } }], {
+        useNativeDriver: true,
+      }),
+    [filterChipScrollX]
+  );
 
   const load = useCallback(async () => {
     if (!routeId || !date) {
@@ -268,35 +283,68 @@ export default function ScheduleResultsScreen() {
       </View>
       <View style={styles.filterBarRow}>
         <View style={styles.frozenFilterWrap}>
-          <Animated.View style={[styles.filterAdaptiveBtn, { width: filterBtnWidth }]}>
-            <Pressable
-              onPress={() => setShowFilterSheet(true)}
-              style={({ pressed }) => [
-                styles.filterAdaptivePress,
-                showFilterSheet && styles.filterAdaptivePressActive,
-                pressed && { opacity: 0.88 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Filter and sort"
-            >
-              <FontAwesome
-                name="sliders"
-                size={14}
-                color={showFilterSheet ? palette.white : palette.slate600}
-                style={styles.filterAdaptiveIcon}
-              />
+          <Pressable
+            onPress={() => setShowFilterSheet(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Filter and sort"
+            style={({ pressed }) => [pressed && { opacity: 0.9 }]}
+          >
+            <View style={styles.filterPillFrame}>
               <Animated.View
                 style={[
-                  styles.filterAdaptiveLabelWrap,
-                  { opacity: filterLabelOpacity, width: filterPillWidth },
+                  styles.filterPillFull,
+                  showFilterSheet ? styles.filterPillOpen : styles.filterPillClosed,
+                  { opacity: filterPillFullOpacity },
                 ]}
+                pointerEvents="none"
               >
-                <AppText numberOfLines={1} style={[styles.filterAdaptiveLabel, showFilterSheet && styles.filterAdaptiveLabelActive]}>
-                  Filter & Sort
-                </AppText>
+                <View style={styles.filterPillRow}>
+                  <View style={styles.filterPillIconSlot}>
+                    <FontAwesome
+                      name="sliders"
+                      size={14}
+                      color={showFilterSheet ? palette.white : palette.slate600}
+                      style={styles.filterAdaptiveIcon}
+                    />
+                  </View>
+                  <Animated.View
+                    style={[
+                      styles.filterPillLabelWrap,
+                      {
+                        opacity: filterPillLabelOpacity,
+                        transform: [{ translateX: filterPillLabelTranslateX }],
+                      },
+                    ]}
+                  >
+                    <AppText
+                      numberOfLines={1}
+                      style={[
+                        styles.filterAdaptiveLabel,
+                        showFilterSheet && styles.filterAdaptiveLabelActive,
+                      ]}
+                    >
+                      Filter & Sort
+                    </AppText>
+                  </Animated.View>
+                </View>
               </Animated.View>
-            </Pressable>
-          </Animated.View>
+              <Animated.View
+                style={[
+                  styles.filterPillIconOnly,
+                  showFilterSheet ? styles.filterPillOpen : styles.filterPillClosed,
+                  { opacity: filterPillIconOpacity },
+                ]}
+                pointerEvents="none"
+              >
+                <FontAwesome
+                  name="sliders"
+                  size={14}
+                  color={showFilterSheet ? palette.white : palette.slate600}
+                  style={styles.filterAdaptiveIcon}
+                />
+              </Animated.View>
+            </View>
+          </Pressable>
         </View>
         <View style={styles.chipScrollWrap}>
           <Animated.ScrollView
@@ -304,18 +352,15 @@ export default function ScheduleResultsScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chipScroller}
             style={styles.chipScrollView}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: filterScrollX } } }],
-              { useNativeDriver: false }
-            )}
+            onScroll={onFilterChipsScroll}
             scrollEventThrottle={16}
           >
             <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
             <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
-            <Chip label="Non-AC" icon="sun-o" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
-            <Chip label="Sleeper" icon="bed" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
-            <Chip label="Semi-sleeper" icon="moon-o" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
-            <Chip label="Single seats" icon="user" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
+            <Chip label="Non-AC" icon="non-ac" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
+            <Chip label="Sleeper" icon="seat-sleeper" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
+            <Chip label="Semi-sleeper" icon="seat-semi" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
+            <Chip label="Single seats" icon="seat-seater" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
             <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
             <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
           </Animated.ScrollView>
@@ -391,10 +436,10 @@ export default function ScheduleResultsScreen() {
             <View style={styles.filterGrid}>
               <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
               <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
-              <Chip label="Non-AC" icon="sun-o" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
-              <Chip label="Sleeper" icon="bed" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
-              <Chip label="Semi-sleeper" icon="moon-o" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
-              <Chip label="Single seats" icon="user" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
+              <Chip label="Non-AC" icon="non-ac" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
+              <Chip label="Sleeper" icon="seat-sleeper" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
+              <Chip label="Semi-sleeper" icon="seat-semi" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
+              <Chip label="Single seats" icon="seat-seater" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
               <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
               <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
             </View>
@@ -440,36 +485,53 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   frozenFilterWrap: {
-    width: 128,
     marginRight: 6,
     alignItems: "flex-start",
     zIndex: 10,
     backgroundColor: palette.slate50,
   },
-  filterAdaptiveBtn: {
+  filterPillFrame: { width: 128, height: 38, position: "relative" },
+  filterPillFull: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: 128,
     height: 38,
-    overflow: "hidden",
-  },
-  filterAdaptivePress: {
-    width: "100%",
-    height: "100%",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: palette.slate200,
-    backgroundColor: palette.white,
-    paddingHorizontal: 12,
+    overflow: "hidden",
+  },
+  filterPillIconOnly: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: 40,
+    height: 38,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterPillClosed: { borderColor: palette.slate200, backgroundColor: palette.white },
+  filterPillOpen: { borderColor: palette.indigo600, backgroundColor: palette.indigo600 },
+  filterPillRow: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
+    minWidth: 0,
+    height: 38,
+    paddingLeft: 8,
+    paddingRight: 8,
+    gap: 4,
   },
-  filterAdaptivePressActive: { borderColor: palette.indigo600, backgroundColor: palette.indigo600 },
-  filterAdaptiveIcon: { width: 14, textAlign: "center", marginRight: 6 },
-  filterAdaptiveLabelWrap: { flexShrink: 1, overflow: "hidden" },
+  filterPillIconSlot: { width: 20, alignItems: "center", justifyContent: "center" },
+  filterPillLabelWrap: { minWidth: 0, flex: 1, overflow: "hidden", justifyContent: "center" },
+  filterAdaptiveIcon: { width: 14, textAlign: "center" },
   filterAdaptiveLabel: { fontSize: 12, lineHeight: 16, color: palette.slate700 },
   filterAdaptiveLabelActive: { color: palette.white, fontFamily: fonts.semibold },
-  chipScrollWrap: { flex: 1, position: "relative", marginLeft: -6 },
+  chipScrollWrap: { flex: 1, position: "relative" },
   chipScrollView: { flex: 1 },
-  chipScroller: { paddingLeft: 6, paddingRight: 2 },
+  chipScroller: { paddingLeft: 0, paddingRight: 2 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.35)" },
   sheet: {
     backgroundColor: palette.white,
@@ -512,27 +574,51 @@ function Chip({
   onPress,
 }: {
   label: string;
-  icon?: React.ComponentProps<typeof FontAwesome>["name"];
+  icon?:
+    | React.ComponentProps<typeof FontAwesome>["name"]
+    | "non-ac"
+    | "seat-seater"
+    | "seat-sleeper"
+    | "seat-semi";
   active?: boolean;
   width?: number | "auto";
   onPress: () => void;
 }) {
+  const iconColor = active ? palette.white : palette.slate500;
   const customIcon =
-    icon === "sun-o" ? (
+    icon === "non-ac" ? (
       <View style={chipStyles.nonAcIconWrap}>
-        <FontAwesome name="snowflake-o" size={12} color={active ? palette.white : palette.slate500} />
+        <MaterialCommunityIcons name="air-conditioner" size={13} color={iconColor} />
         <View style={[chipStyles.nonAcSlash, active && chipStyles.nonAcSlashActive]} />
       </View>
-    ) : icon === "moon-o" ? (
-      <View style={chipStyles.semiIconWrap}>
-        <FontAwesome name="bed" size={12} color={active ? palette.white : palette.slate500} />
-        <View style={[chipStyles.semiDot, active && chipStyles.semiDotActive]} />
+    ) : icon === "seat-seater" ? (
+      <MaterialCommunityIcons
+        name="seat-passenger"
+        size={15}
+        color={iconColor}
+        style={chipStyles.seaterIcon}
+      />
+    ) : icon === "seat-sleeper" ? (
+      <FontAwesome
+        name="bed"
+        size={13}
+        color={iconColor}
+        style={chipStyles.sleeperIcon}
+      />
+    ) : icon === "seat-semi" ? (
+      <View style={chipStyles.seatSemiWrap}>
+        <View style={[chipStyles.seatSemiBackrest, { backgroundColor: iconColor }]} />
+        <View style={[chipStyles.seatSemiCushion, { backgroundColor: iconColor }]} />
+        <View style={[chipStyles.seatSemiPersonBack, { backgroundColor: iconColor }]} />
+        <View style={[chipStyles.seatSemiPersonThigh, { backgroundColor: iconColor }]} />
+        <View style={[chipStyles.seatSemiPersonLeg, { backgroundColor: iconColor }]} />
+        <View style={[chipStyles.seatSemiPersonHead, { backgroundColor: iconColor }]} />
       </View>
     ) : icon ? (
       <FontAwesome
-        name={icon}
+        name={icon as React.ComponentProps<typeof FontAwesome>["name"]}
         size={12}
-        color={active ? palette.white : palette.slate500}
+        color={iconColor}
         style={{ marginRight: 6 }}
       />
     ) : null;
@@ -589,27 +675,68 @@ const chipStyles = StyleSheet.create({
     color: palette.white,
     fontFamily: fonts.semibold,
   },
-  nonAcIconWrap: { width: 13, height: 13, marginRight: 6, alignItems: "center", justifyContent: "center" },
+  nonAcIconWrap: { width: 14, height: 14, marginRight: 6, alignItems: "center", justifyContent: "center" },
   nonAcSlash: {
     position: "absolute",
-    width: 14,
-    height: 1.6,
+    width: 15,
+    height: 1.7,
     backgroundColor: palette.slate500,
     transform: [{ rotate: "-35deg" }],
     borderRadius: 2,
   },
   nonAcSlashActive: { backgroundColor: palette.white },
-  semiIconWrap: { width: 14, height: 14, marginRight: 6, alignItems: "center", justifyContent: "center" },
-  semiDot: {
+  seaterIcon: { marginRight: 6 },
+  sleeperIcon: { marginRight: 6 },
+  seatSemiWrap: { position: "relative", width: 16, height: 14, marginRight: 6, alignItems: "center", justifyContent: "center" },
+  seatSemiBackrest: {
     position: "absolute",
-    right: -1,
-    top: -1,
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: palette.slate400,
+    left: 1,
+    top: 2,
+    width: 4,
+    height: 8,
+    borderRadius: 2,
+    opacity: 0.95,
   },
-  semiDotActive: { backgroundColor: palette.white },
+  seatSemiCushion: {
+    position: "absolute",
+    left: 4,
+    top: 7,
+    width: 9,
+    height: 4,
+    borderRadius: 2,
+  },
+  seatSemiPersonBack: {
+    position: "absolute",
+    left: 7,
+    top: 3,
+    width: 2,
+    height: 4,
+    borderRadius: 2,
+  },
+  seatSemiPersonThigh: {
+    position: "absolute",
+    left: 8,
+    top: 7,
+    width: 4,
+    height: 2,
+    borderRadius: 2,
+  },
+  seatSemiPersonLeg: {
+    position: "absolute",
+    left: 10,
+    top: 8,
+    width: 3,
+    height: 2,
+    borderRadius: 2,
+  },
+  seatSemiPersonHead: {
+    position: "absolute",
+    left: 8,
+    top: 3,
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+  },
   optionRow: {
     minHeight: 42,
     borderRadius: 12,

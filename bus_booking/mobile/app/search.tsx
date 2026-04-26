@@ -25,6 +25,7 @@ import { addDays, formatLocalYMD, formatYMDChip, parseYMD } from "@/lib/date";
 import { routesApi } from "@/lib/api";
 import { addRecentTrip, getRecentTrips, type RecentTrip } from "@/lib/recent-trips";
 import { useSearchDraft } from "@/lib/search-draft-context";
+import { normalizeCityAlias } from "@/lib/city-alias";
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -61,21 +62,26 @@ export default function SearchScreen() {
   }, []);
 
   const openResults = async (fromCity: string, toCity: string, date: string) => {
-    const list = await routesApi.list(fromCity.trim(), toCity.trim());
+    const fromNorm = normalizeCityAlias(fromCity);
+    const toNorm = normalizeCityAlias(toCity);
+    const list = await routesApi.list(fromNorm, toNorm);
     if (!list.length) {
-      Alert.alert("No route", "We could not match those cities. Try different spellings (e.g. Bengaluru).");
+      Alert.alert(
+        "No route",
+        "We could not match those cities. Try Bengaluru/Bangalore and Puducherry/Pondicherry spellings."
+      );
       return;
     }
     const routeId = list[0].id;
-    await addRecentTrip({ from: fromCity.trim(), to: toCity.trim(), dateYmd: date });
+    await addRecentTrip({ from: fromNorm, to: toNorm, dateYmd: date });
     setRecentTrips(await getRecentTrips());
     router.push({
       pathname: "/schedule-results",
       params: {
         routeId: String(routeId),
         date,
-        from: fromCity.trim(),
-        to: toCity.trim(),
+        from: fromNorm,
+        to: toNorm,
       },
     });
   };

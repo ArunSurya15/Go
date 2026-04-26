@@ -160,7 +160,7 @@ def generate_ticket_pdf(booking: Booking) -> ContentFile:
     main_flow = max(64.0, uw - qr_w - hero_right_left_pad - hero_right_right_pad)
 
     styles = getSampleStyleSheet()
-
+    
     st_brand = ParagraphStyle(
         "brand",
         parent=styles["Normal"],
@@ -317,7 +317,7 @@ def generate_ticket_pdf(booking: Booking) -> ContentFile:
     arr_s = _p(_format_dt_pdf(sched.arrival_dt))
 
     story = []
-
+    
     # ── Top brand bar (full width) ─────────────────────────────
     st_right_meta = ParagraphStyle(
         "rs",
