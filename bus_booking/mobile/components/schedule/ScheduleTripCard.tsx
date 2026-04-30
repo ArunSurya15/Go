@@ -51,10 +51,10 @@ export function ScheduleTripCard({ schedule, onPress }: Props) {
         }
       : dealTone === "smart"
         ? {
-            chip: "SMART PICK",
-            ribbon: "TOP PICK",
+            chip: "BEST RATED",
+            ribbon: "TOP RATED",
             title: "Top rated and worth it",
-            subtitle: promo.trim() || "Trusted choice for comfortable rides",
+            subtitle: promo.trim() || "Traveller favorite with top reviews",
             icon: "thumbs-up" as const,
             strip: styles.dealStripSmart,
             spark: styles.dealSparkSmart,

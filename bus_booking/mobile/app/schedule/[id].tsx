@@ -407,23 +407,43 @@ export default function ScheduleDetailScreen() {
           <AppText variant="caption" style={styles.stickyFareLabel}>Per seat from</AppText>
           <AppText style={styles.stickyFareAmount}>{formatRupee(String(displayFare))}</AppText>
         </View>
-        <PrimaryButton
-          title="Choose seats"
-          style={styles.stickyBtn}
-          onPress={() =>
-            router.push({
-              pathname: "/select-seats",
-              params: {
-                schedule_id: String(schedule.id),
-                date: d,
-                from: fromL,
-                to: toL,
-                fare: schedule.fare,
-                route_id: rid || "",
-              },
-            })
-          }
-        />
+        <View style={styles.stickyActions}>
+          <PrimaryButton
+            title="Live tracking (demo)"
+            variant="outline"
+            style={styles.stickyTrackBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/live-tracking",
+                params: {
+                  schedule_id: String(schedule.id),
+                  from: fromL,
+                  to: toL,
+                  dep: schedule.departure_dt,
+                  arr: schedule.arrival_dt,
+                  bus: busLabel,
+                },
+              })
+            }
+          />
+          <PrimaryButton
+            title="Choose seats"
+            style={styles.stickyBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/select-seats",
+                params: {
+                  schedule_id: String(schedule.id),
+                  date: d,
+                  from: fromL,
+                  to: toL,
+                  fare: schedule.fare,
+                  route_id: rid || "",
+                },
+              })
+            }
+          />
+        </View>
       </View>
 
       {/* ── full reviews bottom sheet ─────────────────────────────────────── */}
@@ -592,5 +612,7 @@ const styles = StyleSheet.create({
   stickyFareHint: { flex: 1 },
   stickyFareLabel: { color: palette.slate500 },
   stickyFareAmount: { fontFamily: fonts.bold, fontSize: 22, color: palette.indigo700 },
-  stickyBtn: { flex: 1.6 },
+  stickyActions: { flex: 1.9, gap: 8 },
+  stickyTrackBtn: { minHeight: 40 },
+  stickyBtn: { minHeight: 42 },
 });

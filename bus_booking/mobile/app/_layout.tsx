@@ -92,6 +92,7 @@ function RootLayoutNav() {
             />
             <Stack.Screen name="schedule-results" options={{ title: "Trips", headerShadowVisible: false }} />
             <Stack.Screen name="schedule/[id]" options={{ title: "Trip", headerShadowVisible: false }} />
+            <Stack.Screen name="live-tracking" options={{ title: "Live tracking", headerShadowVisible: false }} />
             <Stack.Screen name="select-seats" options={{ title: "Seats", headerShadowVisible: false }} />
             <Stack.Screen name="board-drop" options={{ title: "Board & drop", headerShadowVisible: false }} />
             <Stack.Screen name="passenger" options={{ title: "Passengers", headerShadowVisible: false }} />

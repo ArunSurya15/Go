@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Easing,
   FlatList,
   Modal,
   Pressable,
@@ -59,36 +60,30 @@ export default function ScheduleResultsScreen() {
   const [highRatedOnly, setHighRatedOnly] = useState(false);
   const [liveTrackingOnly, setLiveTrackingOnly] = useState(false);
 
-  /** Horizontal offset of chip row; drives cross-fade between full pill and icon pill. */
-  const filterChipScrollX = useRef(new Animated.Value(0)).current;
-  const FILTER_PILL_FADE_IN = 42;
-  const filterPillFullOpacity = filterChipScrollX.interpolate({
-    inputRange: [0, 10, 24, FILTER_PILL_FADE_IN],
-    outputRange: [1, 0.9, 0.35, 0],
-    extrapolate: "clamp",
-  });
-  const filterPillIconOpacity = filterChipScrollX.interpolate({
-    inputRange: [0, 16, 28, FILTER_PILL_FADE_IN],
-    outputRange: [0, 0.2, 0.72, 1],
-    extrapolate: "clamp",
-  });
-  const filterPillLabelOpacity = filterChipScrollX.interpolate({
-    inputRange: [0, 8, 20, 30, FILTER_PILL_FADE_IN],
-    outputRange: [1, 0.95, 0.55, 0.12, 0],
-    extrapolate: "clamp",
-  });
-  const filterPillLabelTranslateX = filterChipScrollX.interpolate({
-    inputRange: [0, FILTER_PILL_FADE_IN],
-    outputRange: [0, -5],
-    extrapolate: "clamp",
-  });
-  const onFilterChipsScroll = useMemo(
-    () =>
-      Animated.event([{ nativeEvent: { contentOffset: { x: filterChipScrollX } } }], {
+  /** Filter pill animation - uses scale instead of width for smooth native animation */
+  const [filterMinimized, setFilterMinimized] = useState(false);
+  const filterLabelOpacityAnim = useRef(new Animated.Value(1)).current;
+  const filterLabelScaleAnim = useRef(new Animated.Value(1)).current;
+
+  const toggleFilterPill = useCallback((minimize: boolean) => {
+    if (filterMinimized === minimize) return;
+    setFilterMinimized(minimize);
+    
+    Animated.parallel([
+      Animated.timing(filterLabelOpacityAnim, {
+        toValue: minimize ? 0 : 1,
+        duration: minimize ? 140 : 200,
+        easing: minimize ? Easing.in(Easing.quad) : Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
-    [filterChipScrollX]
-  );
+      Animated.timing(filterLabelScaleAnim, {
+        toValue: minimize ? 0.7 : 1,
+        duration: minimize ? 140 : 200,
+        easing: minimize ? Easing.in(Easing.quad) : Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [filterMinimized, filterLabelOpacityAnim, filterLabelScaleAnim]);
 
   const load = useCallback(async () => {
     if (!routeId || !date) {
@@ -279,89 +274,66 @@ export default function ScheduleResultsScreen() {
         </Pressable>
       </View>
       <View style={styles.filterBarRow}>
-        <View style={styles.frozenFilterWrap}>
+        <View style={[styles.frozenFilterWrap, filterMinimized && styles.frozenFilterWrapMinimized]}>
           <Pressable
             onPress={() => setShowFilterSheet(true)}
             accessibilityRole="button"
             accessibilityLabel="Filter and sort"
-            style={({ pressed }) => [pressed && { opacity: 0.9 }]}
+            style={({ pressed }) => [styles.filterPillPress, pressed && { opacity: 0.9 }]}
           >
-            <View style={styles.filterPillFrame}>
+            <View style={[styles.filterPill, showFilterSheet ? styles.filterPillOpen : styles.filterPillClosed]}>
+              <FontAwesome
+                name="sliders"
+                size={15}
+                color={showFilterSheet ? palette.white : palette.slate600}
+              />
               <Animated.View
-                style={[
-                  styles.filterPillFull,
-                  showFilterSheet ? styles.filterPillOpen : styles.filterPillClosed,
-                  { opacity: filterPillFullOpacity },
-                ]}
                 pointerEvents="none"
-              >
-                <View style={styles.filterPillRow}>
-                  <View style={styles.filterPillIconSlot}>
-                    <FontAwesome
-                      name="sliders"
-                      size={14}
-                      color={showFilterSheet ? palette.white : palette.slate600}
-                      style={styles.filterAdaptiveIcon}
-                    />
-                  </View>
-                  <Animated.View
-                    style={[
-                      styles.filterPillLabelWrap,
-                      {
-                        opacity: filterPillLabelOpacity,
-                        transform: [{ translateX: filterPillLabelTranslateX }],
-                      },
-                    ]}
-                  >
-                    <AppText
-                      numberOfLines={1}
-                      style={[
-                        styles.filterAdaptiveLabel,
-                        showFilterSheet && styles.filterAdaptiveLabelActive,
-                      ]}
-                    >
-                      Filter & Sort
-                    </AppText>
-                  </Animated.View>
-                </View>
-              </Animated.View>
-              <Animated.View
                 style={[
-                  styles.filterPillIconOnly,
-                  showFilterSheet ? styles.filterPillOpen : styles.filterPillClosed,
-                  { opacity: filterPillIconOpacity },
+                  styles.filterPillLabelWrap,
+                  {
+                    opacity: filterLabelOpacityAnim,
+                    transform: [{ scaleX: filterLabelScaleAnim }],
+                  },
                 ]}
-                pointerEvents="none"
               >
-                <FontAwesome
-                  name="sliders"
-                  size={14}
-                  color={showFilterSheet ? palette.white : palette.slate600}
-                  style={styles.filterAdaptiveIcon}
-                />
+                <AppText
+                  numberOfLines={1}
+                  style={[
+                    styles.filterPillLabel,
+                    showFilterSheet && styles.filterPillLabelActive,
+                  ]}
+                >
+                  Filter & Sort
+                </AppText>
               </Animated.View>
             </View>
           </Pressable>
         </View>
-        <View style={styles.chipScrollWrap}>
-          <Animated.ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipScroller}
-            style={styles.chipScrollView}
-            onScroll={onFilterChipsScroll}
-            scrollEventThrottle={16}
-          >
-            <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
-            <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
-            <Chip label="Non-AC" icon="non-ac" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
-            <Chip label="Sleeper" icon="seat-sleeper" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
-            <Chip label="Semi-sleeper" icon="seat-semi" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
-            <Chip label="Single seats" icon="seat-seater" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
-            <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
-            <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
-          </Animated.ScrollView>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipScroller}
+          style={styles.chipScrollView}
+          onScroll={(e) => {
+            const x = e.nativeEvent.contentOffset.x || 0;
+            if (x > 12 && !filterMinimized) {
+              toggleFilterPill(true);
+            } else if (x <= 2 && filterMinimized) {
+              toggleFilterPill(false);
+            }
+          }}
+          scrollEventThrottle={16}
+        >
+          <Chip label="Deals" icon="tags" width={88} active={dealsOnly} onPress={() => setDealsOnly((v) => !v)} />
+          <Chip label="AC" icon="snowflake-o" width={78} active={acOnly} onPress={() => setAcOnly((v) => !v)} />
+          <Chip label="Non-AC" icon="non-ac" width={98} active={nonAcOnly} onPress={() => setNonAcOnly((v) => !v)} />
+          <Chip label="Sleeper" icon="seat-sleeper" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
+          <Chip label="Semi-sleeper" icon="seat-semi" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
+          <Chip label="Single seats" icon="seat-seater" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
+          <Chip label="Highly rated" icon="top-rated" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
+          <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
+        </ScrollView>
       </View>
       {err ? (
         <SurfaceCard style={{ marginBottom: 12 }}>
@@ -437,7 +409,7 @@ export default function ScheduleResultsScreen() {
               <Chip label="Sleeper" icon="seat-sleeper" width={104} active={sleeperOnly} onPress={() => setSleeperOnly((v) => !v)} />
               <Chip label="Semi-sleeper" icon="seat-semi" width={126} active={semiSleeperOnly} onPress={() => setSemiSleeperOnly((v) => !v)} />
               <Chip label="Single seats" icon="seat-seater" width={116} active={singleSeatOnly} onPress={() => setSingleSeatOnly((v) => !v)} />
-              <Chip label="Highly rated" icon="star" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
+              <Chip label="Highly rated" icon="top-rated" width={122} active={highRatedOnly} onPress={() => setHighRatedOnly((v) => !v)} />
               <Chip label="Live tracking" icon="map-marker" width={126} active={liveTrackingOnly} onPress={() => setLiveTrackingOnly((v) => !v)} />
             </View>
           </ScrollView>
@@ -482,51 +454,40 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   frozenFilterWrap: {
-    marginRight: 6,
+    width: 128,
+    marginRight: 8,
     alignItems: "flex-start",
     zIndex: 10,
     backgroundColor: palette.slate50,
-  },
-  filterPillFrame: { width: 128, height: 38, position: "relative" },
-  filterPillFull: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: 128,
-    height: 38,
-    borderRadius: 999,
-    borderWidth: 1,
     overflow: "hidden",
   },
-  filterPillIconOnly: {
-    position: "absolute",
-    left: 0,
-    top: 0,
+  frozenFilterWrapMinimized: {
     width: 40,
+  },
+  filterPillPress: {
+    width: 128,
     height: 38,
+  },
+  filterPill: {
+    height: 38,
+    width: 128,
+    paddingLeft: 13,
+    paddingRight: 13,
     borderRadius: 999,
     borderWidth: 1,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
+    gap: 6,
   },
   filterPillClosed: { borderColor: palette.slate200, backgroundColor: palette.white },
   filterPillOpen: { borderColor: palette.indigo600, backgroundColor: palette.indigo600 },
-  filterPillRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    minWidth: 0,
-    height: 38,
-    paddingLeft: 8,
-    paddingRight: 8,
-    gap: 4,
+  filterPillLabelWrap: {
+    overflow: "hidden",
+    maxWidth: 84,
   },
-  filterPillIconSlot: { width: 20, alignItems: "center", justifyContent: "center" },
-  filterPillLabelWrap: { minWidth: 0, flex: 1, overflow: "hidden", justifyContent: "center" },
-  filterAdaptiveIcon: { width: 14, textAlign: "center" },
-  filterAdaptiveLabel: { fontSize: 12, lineHeight: 16, color: palette.slate700 },
-  filterAdaptiveLabelActive: { color: palette.white, fontFamily: fonts.semibold },
-  chipScrollWrap: { flex: 1, position: "relative" },
+  filterPillLabel: { fontSize: 12, lineHeight: 16, color: palette.slate700 },
+  filterPillLabelActive: { color: palette.white, fontFamily: fonts.semibold },
   chipScrollView: { flex: 1 },
   chipScroller: { paddingLeft: 0, paddingRight: 2 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.35)" },
@@ -576,7 +537,8 @@ function Chip({
     | "non-ac"
     | "seat-seater"
     | "seat-sleeper"
-    | "seat-semi";
+    | "seat-semi"
+    | "top-rated";
   active?: boolean;
   width?: number | "auto";
   onPress: () => void;
@@ -584,7 +546,7 @@ function Chip({
   const iconColor = active ? palette.white : palette.slate500;
   const customIcon =
     icon === "non-ac" ? (
-      <View style={chipStyles.nonAcIconWrap}>
+      <View style={chipStyles.nonAcWrap}>
         <MaterialCommunityIcons name="air-conditioner" size={13} color={iconColor} />
         <View style={[chipStyles.nonAcSlash, active && chipStyles.nonAcSlashActive]} />
       </View>
@@ -610,6 +572,16 @@ function Chip({
         <View style={[chipStyles.seatSemiPersonThigh, { backgroundColor: iconColor }]} />
         <View style={[chipStyles.seatSemiPersonLeg, { backgroundColor: iconColor }]} />
         <View style={[chipStyles.seatSemiPersonHead, { backgroundColor: iconColor }]} />
+      </View>
+    ) : icon === "top-rated" ? (
+      <View style={chipStyles.topRatedWrap}>
+        <View style={chipStyles.topRatedStarsRow}>
+          <FontAwesome name="star" size={4} color={iconColor} />
+          <FontAwesome name="star" size={5} color={iconColor} />
+          <FontAwesome name="star" size={8} color={iconColor} />
+          <FontAwesome name="star" size={5} color={iconColor} />
+          <FontAwesome name="star" size={4} color={iconColor} />
+        </View>
       </View>
     ) : icon ? (
       <FontAwesome
@@ -672,7 +644,7 @@ const chipStyles = StyleSheet.create({
     color: palette.white,
     fontFamily: fonts.semibold,
   },
-  nonAcIconWrap: { width: 14, height: 14, marginRight: 6, alignItems: "center", justifyContent: "center" },
+  nonAcWrap: { width: 14, height: 14, marginRight: 6, alignItems: "center", justifyContent: "center" },
   nonAcSlash: {
     position: "absolute",
     width: 15,
@@ -684,55 +656,75 @@ const chipStyles = StyleSheet.create({
   nonAcSlashActive: { backgroundColor: palette.white },
   seaterIcon: { marginRight: 6 },
   sleeperIcon: { marginRight: 6 },
-  seatSemiWrap: { position: "relative", width: 16, height: 14, marginRight: 6, alignItems: "center", justifyContent: "center" },
+  seatSemiWrap: {
+    position: "relative",
+    width: 18,
+    height: 18,
+    marginRight: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ scale: 0.9 }],
+  },
   seatSemiBackrest: {
     position: "absolute",
-    left: 1,
-    top: 2,
-    width: 4,
-    height: 8,
+    width: 3,
+    height: 11,
     borderRadius: 2,
-    opacity: 0.95,
+    left: 5,
+    top: 3,
+    transform: [{ rotate: "-28deg" }],
   },
   seatSemiCushion: {
     position: "absolute",
-    left: 4,
-    top: 7,
-    width: 9,
-    height: 4,
+    width: 12,
+    height: 3,
     borderRadius: 2,
+    left: 6,
+    top: 12,
   },
   seatSemiPersonBack: {
     position: "absolute",
-    left: 7,
-    top: 3,
-    width: 2,
-    height: 4,
+    width: 4,
+    height: 9,
     borderRadius: 2,
+    left: 9,
+    top: 3,
+    transform: [{ rotate: "-30deg" }],
   },
   seatSemiPersonThigh: {
     position: "absolute",
-    left: 8,
-    top: 7,
-    width: 4,
-    height: 2,
+    width: 7,
+    height: 3,
     borderRadius: 2,
+    left: 11,
+    top: 8.5,
   },
   seatSemiPersonLeg: {
     position: "absolute",
-    left: 10,
-    top: 8,
-    width: 3,
-    height: 2,
+    width: 2,
+    height: 6,
     borderRadius: 2,
+    left: 18,
+    top: 9,
+    transform: [{ rotate: "-45deg" }],
   },
   seatSemiPersonHead: {
     position: "absolute",
-    left: 8,
-    top: 3,
-    width: 3,
-    height: 3,
-    borderRadius: 2,
+    width: 5,
+    height: 5,
+    borderRadius: 4,
+    left: 5,
+    top: -2,
+  },
+  topRatedWrap: { width: 24, height: 10, marginRight: 6, position: "relative", alignItems: "center" },
+  topRatedStarsRow: {
+    position: "absolute",
+    top: -2,
+    left: 0,
+    width: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   optionRow: {
     minHeight: 42,
